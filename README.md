@@ -318,3 +318,38 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a detailed description of
 - Orchestrator, SQL Agent, and Vector Store Agent internals
 - Document lifecycle (INSERT / UPDATE / DELETE / health-check)
 - Evaluation scripts and submission format
+
+## Future Work & Known Limitations
+The current system has real room to grow, both on data quality and architectural maturity.
+
+**Data extraction** is the most impactful area. Fantasy dish, ingredient, and technique names present 
+an inherent challenge: singular/plural disambiguation is unreliable and the boundary between proper nouns 
+and adjectives is blurry. A map-reduce ingestion strategy, would make the extraction task more tractable for smaller models and reduce hallucination surface.
+Related to this, the ingestion pipeline would benefit from a cross-reference constraint: the Manuale di Cucina should 
+be processed first to build a canonical technique registry, with menu ingestion happening afterward 
+and reconciling each extracted technique against that registry. 
+Typos would be normalized, and genuinely novel techniques added explicitly rather than silently duplicated in variant forms. 
+Upgrading the extraction model itself would also compound gains across the entire pipeline, 
+the quality ceiling is currently set by what the extractor produces.
+
+**Inference** has its own open problems. The orchestrator currently over-verifies: with Qwen it tends 
+to issue redundant confirmation queries before settling on an answer, which burns steps from the 
+ReAct budget without improving results. Prompt engineering here is unfinished. More structurally, 
+pre-processing user input and post-processing generated queries before they hit the database would 
+reduce the surface area the LLM needs to reason about on each turn.
+
+**Observability** is largely absent. In a production setting, monitoring which queries fall back to 
+semantic search, and why, would surface organic signals for schema evolution: if certain question 
+types consistently bypass SQL, that's evidence that a new structured field or table is warranted. 
+A companion diagnostic agent would also be valuable: given access to the database and a code sandbox, 
+it could analyze failed benchmark rows and produce structured explanations along the lines of "this 
+query failed because the dish in the ground truth does not have ingredient X in our database", 
+turning opaque fails into signals about whether the failure is in extraction, reasoning, or the query itself.
+
+**Architecture** has a natural evolution path toward a graph database, which would represent relationships more 
+naturally than the current relational schema. 
+Dish name validation against a canonical list would measurably improve Jaccard scores, though 
+it assumes ground-truth data availability that would not exist in a realistic deployment, 
+the tradeoff is worth naming explicitly.
+
+Several additional improvement opportunities are marked directly in the codebase with `TODO` comments.
