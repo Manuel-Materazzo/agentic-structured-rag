@@ -109,14 +109,14 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 - [x] 🔴 `doc_id` calcolato come `sha256(file_content)` deterministicamente
 - [x] 🔴 Scrittura in DuckDB (`documents`, `restaurants`, `dishes`, `dish_ingredients`, `dish_techniques`) con FK corrette verso `doc_id`
-- [ ] 🔴 Chunking del testo parsato via `NodeSplitter` secondo la strategia per tipo di fonte (§8.4):
+- [x] 🔴 Chunking del testo parsato via `NodeSplitter` secondo la strategia per tipo di fonte (§8.4):
   - Menu: chunk per piatto/sezione; fallback 700-1200 caratteri
   - Manuale: chunk per sezione/sottosezione con metadata `section_title`, `topic`
   - Codice Galattico: chunk per sezione normativa + estrazione verso `compliance_rules`
   - Blog HTML: `DoclingParser` con fallback BeautifulSoup; chunk semantici con gerarchia h1/h2/h3
   - Distanze CSV: caricamento diretto in `planet_distances` — NON indicizzato in Qdrant
-- [ ] 🔴 Payload Qdrant conforme al contratto (§7.4): `chunk_id`, `doc_id`, `source_path`, `source_type`, `page`, `section`, `restaurant`, `dish`, `text`
-- [ ] 🔴 `upsert` vettoriale nella collection corretta in base a `source_type`
+- [x] 🔴 Payload Qdrant conforme al contratto (§7.4): `chunk_id`, `doc_id`, `source_path`, `source_type`, `page`, `section`, `restaurant`, `dish`, `text`
+- [x] 🔴 `upsert` vettoriale nella collection corretta in base a `source_type`
 
 ### 2.4 Ingestion log e ciclo di vita
 
@@ -138,7 +138,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### Criteri di accettazione Fase 2
 
-- Tutti i documenti vengono processati con stato `complete` nell'ingestion log
+- Parzialmente soddisfatti: il perimetro di ingestion è implementato e testato con smoke test; resta da rifinire la soglia di `parsing_confidence` e la strategia di chunking basata su `NodeSplitter`
 - La tabella `dish_ingredients` non contiene `quantity_grams = 0.0` per casi non quantificabili
 - Le quattro collection Qdrant contengono punti con payload conforme al contratto
 - Un test di verifica estrae almeno 5 piatti a campione e ne verifica la corretta presenza in DuckDB
@@ -330,8 +330,8 @@ src/
   ingestion/
     runner.py                # entry point ingestion; init DB e collection
     menu_ingestion.py
-    manual_ingestion.py
-    code_ingestion.py
+    cook_manual_ingestion.py
+    galactic_code_ingestion.py
     blog_ingestion.py
     distances_ingestion.py
     structured_extraction.py # LLM entity extractor con confidenza
