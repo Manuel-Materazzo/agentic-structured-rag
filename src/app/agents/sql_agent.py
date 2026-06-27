@@ -31,7 +31,8 @@ CRITICAL RULES:
 - Do not second-guess yourself mid-rationale. long rationales with multiple hypotheses produce inconsistent queries.
 - Return a valid JSON object with this exact schema: {"sql": "SELECT ...", "rationale": "brief explanation"}
 - If the request is ambiguous, still produce the best single SQL query you can infer.
-- In DuckDB, escape single quotes by doubling them: 'L''aquila', never with backslash.
+- If the request asks for a list of dishes, return only the dish names, not other details.
+- Make sure to escape single quotes by doubling them: 'L''aquila', never with backslash.
 
 FUZZY MATCHING:
 - Names in the DB may differ slightly from how they appear in the user's request (typos, gender, accents, truncations).
@@ -75,6 +76,7 @@ QUERY STRUCTURE RULES:
 class SQLAgentResult:
     columns: list[str]
     rows: list[tuple[Any, ...]]
+    sql: str
     error: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -122,6 +124,7 @@ class SQLAgent:
                 return SQLAgentResult(
                     columns=result.columns,
                     rows=result.rows,
+                    sql=sql
                 )
 
             except Exception as exc:
@@ -142,6 +145,7 @@ class SQLAgent:
             columns=[],
             rows=[],
             error=last_error,
+            sql="max retries exceeded",
         )
 
     def _get_llm_client(self):

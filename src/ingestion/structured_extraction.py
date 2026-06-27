@@ -90,14 +90,14 @@ def extract_entities(
 
     # Post-process quantities for menus, it's a special case
     if source_type == "menu":
-        result = _postprocess_quantities(parsed)
+        parsed = _postprocess_quantities(parsed)
 
     log.info(
         "Extraction complete for %s [confidence=%s]",
         source_path,
-        result.get("parsing_confidence", "unknown"),
+        parsed.get("parsing_confidence", "unknown"),
     )
-    return result
+    return parsed
 
 
 def parse_json_response(text: str) -> dict[str, Any]:
