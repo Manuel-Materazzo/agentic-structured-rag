@@ -58,7 +58,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### Database
 
-- [ ] 🔴 Script `src/ingestion/runner.py` — crea `data/database/facts.db` se non esiste ed esegue le CREATE TABLE (§7.3):
+- [x] 🔴 Script `src/ingestion/runner.py` — crea `data/database/facts.db` se non esiste ed esegue le CREATE TABLE (§7.3):
   - `documents`
   - `restaurants`
   - `dishes`
@@ -67,8 +67,8 @@ Nota: produrre dei dev test sulla cartella `tests/`
   - `technique_taxonomy`
   - `planet_distances`
   - `compliance_rules`
-- [ ] 🔴 Script crea `data/database/ingestion_log.db` con tabella `ingestion_log` (stati: `pending → parsing → parsed → extracting → extracted → embedding → indexed → complete / failed`)
-- [ ] 🔴 Qdrant avviato in modalità embedded (o Docker locale); creazione delle quattro collection: `menu_index`, `manual_index`, `code_index`, `blog_index`
+- [x] 🔴 Script crea `data/database/ingestion_log.db` con tabella `ingestion_log` (stati: `pending → parsing → parsed → extracting → extracted → embedding → indexed → complete / failed`)
+- [x] 🔴 Qdrant avviato in modalità embedded (o Docker locale); creazione delle quattro collection: `menu_index`, `manual_index`, `code_index`, `blog_index`
 
 ### Mapping piatti
 
