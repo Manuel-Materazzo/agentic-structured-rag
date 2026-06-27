@@ -8,7 +8,7 @@ import re
 import unicodedata
 from difflib import get_close_matches
 
-from src.app.submission import dish_name_to_id, get_dish_mapping
+from src.evaluation.generate_submission_file import dish_name_to_id, get_dish_mapping
 
 
 def normalize_text(text: str) -> str:

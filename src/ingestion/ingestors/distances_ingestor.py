@@ -106,8 +106,12 @@ class DistancesIngestor(BaseIngestor):
 
         log.info("Wrote %d planet distance rows for doc %s", rows_inserted, doc_id[:8])
 
-    def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path, raw_text: str) -> Callable[
-        [str, str, dict], None]:
+    def make_vector_indexer(
+            self,
+            ingestion_manager: IngestionManager,
+            source_path: Path,
+            raw_text: str
+    ) -> Callable[[str, str, dict], None]:
         """
                 Distances are not indexed in Qdrant. Returning a no-op callback.
         """

@@ -162,7 +162,9 @@ class BaseIngestor(ABC):
             existing = ingestion_manager.km.log_get(source_path)
 
             # Check and skip documents that have already completed fist ingestion phase
-            if existing and existing["doc_id"] == doc_id and existing["status"] in ["complete", "indexed", "embedding", "extracted"]:
+            if existing and existing["doc_id"] == doc_id and existing["status"] in [
+                "complete", "indexed", "embedding", "extracted"
+            ]:
                 cache_path = PARSED_DIR / f"{doc_id}.txt"
                 if cache_path.exists():
                     log.info("Loading cached parsed text for %s", file_path.name)

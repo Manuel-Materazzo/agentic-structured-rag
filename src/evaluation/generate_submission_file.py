@@ -154,7 +154,6 @@ def export_submission(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import sys
     logging.basicConfig(level=logging.INFO)
     load_dish_mapping()
     out = export_empty_submission()

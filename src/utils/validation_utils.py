@@ -4,7 +4,7 @@ validation_utils.py — Candidate validation against the curated dish mapping.
 
 from __future__ import annotations
 
-from src.app.submission import get_dish_mapping, dish_name_to_id
+from src.evaluation.generate_submission_file import get_dish_mapping, dish_name_to_id
 
 
 def validate_candidate_dishes(names: list[str]) -> list[str]:

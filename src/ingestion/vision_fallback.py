@@ -97,7 +97,7 @@ def _parse_with_llm_vision(source_path: str) -> str:
         pil_image.save(buf, format="JPEG", quality=85)
         image_b64 = base64.b64encode(buf.getvalue()).decode()
 
-        #TODO: Make model and prompt configurable
+        # TODO: Make model and prompt configurable
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[

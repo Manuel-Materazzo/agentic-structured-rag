@@ -15,6 +15,7 @@ DATASET_DIR = Path("Dataset")
 INPUT_CSV = DATASET_DIR / "domande_con_risposte.csv"
 OUTPUT_CSV = DATASET_DIR / "inference_results.csv"
 
+
 def start_inference():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
@@ -78,8 +79,8 @@ def start_inference():
                         result.sql, predicted_ids, predicted_text
                     ])
 
-
     log.info(f"✅ Inferenza completata! Risultati salvati in: {OUTPUT_CSV}")
+
 
 if __name__ == "__main__":
     start_inference()

@@ -12,8 +12,6 @@ from typing import Any
 
 import duckdb
 
-from src.app.config import FACTS_DB_PATH
-
 
 @dataclass(frozen=True)
 class QueryResult:
@@ -42,14 +40,12 @@ def get_schema_overview(con: duckdb.DuckDBPyConnection) -> str:
 
 
 def run_sql(
-    con: duckdb.DuckDBPyConnection,
-    sql: str,
-    params: list[Any] | None = None,
+        con: duckdb.DuckDBPyConnection,
+        sql: str,
+        params: list[Any] | None = None,
 ) -> QueryResult:
     """Execute SQL and return the raw rows and column names."""
     cur = con.execute(sql, params or [])
     columns = [desc[0] for desc in cur.description or []]
     rows = cur.fetchall()
     return QueryResult(columns=columns, rows=rows)
-
-

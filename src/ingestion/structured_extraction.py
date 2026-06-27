@@ -153,7 +153,8 @@ def _postprocess_quantities(result: dict[str, Any]) -> dict[str, Any]:
     for dish in result.get("dishes", []):
         for ingredient in dish.get("ingredients", []):
             qty = ingredient.get("quantity_grams")
-            if qty is None: continue
+            if qty is None:
+                continue
             try:
                 qty = float(qty)
             except (TypeError, ValueError):

@@ -17,7 +17,7 @@ from metrics.jaccard_similarity import score
     "--row-id-column",
     default="row_id",
     show_default=True,
-    help=("Name of the column used to align rows between solution and submission."),
+    help="Name of the column used to align rows between solution and submission.",
 )
 def main(submission: str, row_id_column: str) -> None:
     """Evaluate a submission CSV using the Jaccard similarity metric used in Kaggle."""

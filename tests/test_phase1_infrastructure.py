@@ -12,8 +12,6 @@ from __future__ import annotations
 import math
 
 import pytest
-from pathlib import Path
-from unittest.mock import patch
 
 
 @pytest.fixture(scope="module")
@@ -139,7 +137,7 @@ class TestSubmission:
     def test_empty_submission_100_rows(self, tmp_path):
         """export_empty_submission() must produce 100 rows with row_id and result columns."""
         import pandas as pd
-        from src.app.submission import export_empty_submission
+        from src.evaluation.generate_submission_file import export_empty_submission
 
         out_path = tmp_path / "submission.csv"
         real_out_path = export_empty_submission(output_path=out_path)
@@ -153,7 +151,7 @@ class TestSubmission:
 
     def test_dish_mapping_loads(self):
         """load_dish_mapping() must return a non-empty dict."""
-        from src.app.submission import load_dish_mapping
+        from src.evaluation.generate_submission_file import load_dish_mapping
         mapping = load_dish_mapping()
         assert len(mapping) > 0
         # All values should be integers
@@ -162,7 +160,7 @@ class TestSubmission:
 
     def test_dish_name_to_id_exact(self):
         """dish_name_to_id() must map a known dish name to its integer ID."""
-        from src.app.submission import load_dish_mapping, dish_name_to_id
+        from src.evaluation.generate_submission_file import load_dish_mapping, dish_name_to_id
         mapping = load_dish_mapping()
         # Pick the first entry and verify round-trip
         first_name = next(iter(mapping))
@@ -172,7 +170,7 @@ class TestSubmission:
     def test_submission_export_with_answers(self, tmp_path):
         """export_submission() must write correct row_id/result pairs."""
         import pandas as pd
-        from src.app.submission import export_submission
+        from src.evaluation.generate_submission_file import export_submission
 
         # Fake answers for first 3 questions, TODO: avoid skipping real mapping
         fake_answers = {1: [1, 5], 2: [42], 3: []}
