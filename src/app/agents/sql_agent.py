@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 # TODO: specify pydantic model
 # TODO: extract config
 # TODO: better prompting
+# TODO: separate question entity extraction from SQL generation to simplify inference
 SYSTEM_PROMPT = """You are a precise SQL translator for a DuckDB database.
 Your responsibility is to receive a request in natural language, translate it into a correct DuckDB SQL query, and return it.
 
@@ -119,6 +120,8 @@ class SQLAgent:
                 sql = self._parse_sql_from_response(response.text)
 
                 # Execute DB query
+                # TODO: abstract complexities from LLM by post-editing query
+                # example: add jaro_winkler_similarity programmatically
                 result = run_sql(self._connection, sql, [])
                 log.info(f"SQL Executed: {result}")
                 return SQLAgentResult(

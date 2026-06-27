@@ -200,9 +200,15 @@ CREATE TABLE restaurants (
     name                TEXT NOT NULL,
     chef                TEXT,
     planet              TEXT,
-    chef_license        TEXT,       -- livello licenza dichiarato nel menu
-    professional_orders TEXT[],     -- ordini professionali citati
+    professional_orders TEXT[],     -- ordini professionali citati, TODO: extract in a separate table
     doc_id              TEXT REFERENCES documents(doc_id)
+);
+
+CREATE TABLE IF NOT EXISTS chef_licenses (
+    restaurant_id INTEGER REFERENCES restaurants(id),
+    license_type  TEXT NOT NULL,
+    license_grade INTEGER NOT NULL,
+    PRIMARY KEY (restaurant_id, license_type, license_grade)
 );
 
 CREATE TABLE dishes (
@@ -222,10 +228,15 @@ CREATE TABLE dish_ingredients (
     PRIMARY KEY (dish_id, ingredient)
 );
 
-CREATE TABLE dish_techniques (
+CREATE TABLE IF NOT EXISTS dish_techniques (
     dish_id   INTEGER REFERENCES dishes(id),
     technique TEXT NOT NULL,
     PRIMARY KEY (dish_id, technique)
+);
+
+CREATE TABLE IF NOT EXISTS technique_taxonomy (
+    technique              TEXT PRIMARY KEY,
+    macro_category         TEXT NOT NULL
 );
 
 -- Popolata dal Manuale di Cucina
@@ -243,7 +254,7 @@ CREATE TABLE planet_distances (
     PRIMARY KEY (planet_a, planet_b)
 );
 
--- Popolata dal Codice Galattico
+-- Popolata dal Codice Galattico TODO: structure rules into ingredients and licensing requirements, extract one rule per requirement
 CREATE TABLE compliance_rules (
     id               INTEGER PRIMARY KEY,
     rule_type        TEXT NOT NULL,  -- 'ingredient_limit' | 'technique_license'

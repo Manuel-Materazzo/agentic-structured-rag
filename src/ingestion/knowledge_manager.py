@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 # SQL constants
 # ---------------------------------------------------------------------------
 
+# TODO: optimize primary keys, keeping in mind to avoid data duplications.
 _FACTS_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS documents (
     doc_id       TEXT PRIMARY KEY,
@@ -49,9 +50,15 @@ CREATE TABLE IF NOT EXISTS restaurants (
     name                TEXT NOT NULL,
     chef                TEXT,
     planet              TEXT,
-    chef_license        TEXT,
     professional_orders TEXT[],
     doc_id              TEXT REFERENCES documents(doc_id)
+);
+
+CREATE TABLE IF NOT EXISTS chef_licenses (
+    restaurant_id INTEGER REFERENCES restaurants(id),
+    license_type  TEXT NOT NULL,
+    license_grade INTEGER NOT NULL,
+    PRIMARY KEY (restaurant_id, license_type, license_grade)
 );
 
 CREATE SEQUENCE IF NOT EXISTS restaurants_id_seq START 1;
