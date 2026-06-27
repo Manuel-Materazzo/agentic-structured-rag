@@ -6,6 +6,8 @@ Implements BaseIngestor to handle menu-specific parsing, extraction, and indexin
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -61,7 +63,7 @@ CRITICAL RULES:
 
 
 def _build_datapizza_pipeline(vs, collection_name: str, chunk_max_char: int):
-    """Build a datapizza-ai IngestionPipeline for PDFs."""
+    """Build a datapizza-ai IngestionPipeline. Usiamo DoclingParser perché leggerà un .txt istantaneamente."""
     from datapizza.embedders import ChunkEmbedder
     from datapizza.embedders.openai import OpenAIEmbedder
     from datapizza.modules.parsers.docling import DoclingParser
@@ -102,7 +104,8 @@ class MenuIngestor(BaseIngestor):
     def directory(self) -> Path:
         return MENU_DIR
 
-    def write_db_entries(self, extraction_result: dict[str, Any], doc_id: str, facts_con: duckdb.DuckDBPyConnection) -> None:
+    def write_db_entries(self, extraction_result: dict[str, Any], doc_id: str,
+                         facts_con: duckdb.DuckDBPyConnection) -> None:
         """Write extracted menu data to DuckDB tables."""
         rest_data = extraction_result.get("restaurant", {})
         rest_name = rest_data.get("name") or "Unknown"
@@ -181,20 +184,35 @@ class MenuIngestor(BaseIngestor):
                 except Exception as exc:
                     log.warning("Failed to insert technique '%s': %s", tech_name, exc)
 
-    def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path) -> Callable[[str, str, dict], None]:
+    def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path, raw_text: str) -> Callable[
+        [str, str, dict], None]:
         """Return a vector_indexer bound to the Qdrant connection."""
+
+        # Salva il testo già parsato in un file temporaneo
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8") as tmp:
+            tmp.write(raw_text)
+            tmp_path = tmp.name
+
         def _index(doc_id: str, source_path: str, extraction_result: dict) -> None:
-            vs = ingestion_manager.km.get_qdrant_vectorstore()
-            datapizza_pipeline = _build_datapizza_pipeline(vs, self.collection_name, self.chunk_max_char)
-            restaurant_name = extraction_result.get("restaurant", {}).get("name", "unknown")
-            datapizza_pipeline.run(
-                file_path=source_path,
-                metadata=build_payload(
-                    doc_id=doc_id,
-                    source_path=source_path,
-                    source_type=self.source_type,
-                    text="",
-                    restaurant=restaurant_name,
-                ),
-            )
+            try:
+                vs = ingestion_manager.km.get_qdrant_vectorstore()
+                datapizza_pipeline = _build_datapizza_pipeline(vs, self.collection_name, self.chunk_max_char)
+                restaurant_name = extraction_result.get("restaurant", {}).get("name", "unknown")
+
+                # Passa il file temporaneo alla pipeline
+                datapizza_pipeline.run(
+                    file_path=tmp_path,
+                    metadata=build_payload(
+                        doc_id=doc_id,
+                        source_path=source_path,
+                        source_type=self.source_type,
+                        text="",
+                        restaurant=restaurant_name,
+                    ),
+                )
+            finally:
+                # Assicurati di eliminare il file temporaneo dopo l'uso
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+
         return _index

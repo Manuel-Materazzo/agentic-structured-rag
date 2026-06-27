@@ -6,6 +6,8 @@ Implements BaseIngestor to handle compliance rules and text indexing.
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -46,6 +48,27 @@ CRITICAL RULES:
 """
 
 
+def _build_datapizza_pipeline(vs, collection_name: str, chunk_max_char: int):
+    """Build a datapizza-ai IngestionPipeline. Usiamo DoclingParser perché leggerà un .txt istantaneamente."""
+    from datapizza.embedders import ChunkEmbedder
+    from datapizza.embedders.openai import OpenAIEmbedder
+    from datapizza.modules.parsers.docling import DoclingParser
+    from datapizza.modules.splitters import NodeSplitter
+    from datapizza.pipeline import IngestionPipeline as DatapizzaPipeline
+    from src.app.config import EMBEDDING_MODEL
+
+    embedder_client = OpenAIEmbedder(api_key=OPENAI_API_KEY, model_name=EMBEDDING_MODEL)
+    return DatapizzaPipeline(
+        modules=[
+            DoclingParser(),
+            NodeSplitter(max_char=chunk_max_char),
+            ChunkEmbedder(client=embedder_client),
+        ],
+        vector_store=vs,
+        collection_name=collection_name,
+    )
+
+
 class GalacticCodeIngestor(BaseIngestor):
     @property
     def source_type(self) -> str:
@@ -76,6 +99,11 @@ class GalacticCodeIngestor(BaseIngestor):
     def use_vision_fallback(self) -> bool:
         # Regulatory text is assumed to be machine-readable
         return False
+
+    # Override per aggiungere la normalizzazione del testo specifica per il codice
+    def parse_document(self, source_path: Path) -> str:
+        raw_text = super().parse_document(source_path)
+        return normalize_whitespace(raw_text)
 
     def _parse_code_text(self, source_path: str) -> str:
         """Parse a Codice Galattico document to plain text."""
@@ -126,40 +154,30 @@ class GalacticCodeIngestor(BaseIngestor):
             )
         log.info("Wrote %d compliance rules for doc %s", len(rules), doc_id[:8])
 
-    def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path) -> Callable[
+    def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path, raw_text: str) -> Callable[
         [str, str, dict], None]:
         """Return a vector_indexer that chunks raw_text and upserts into Qdrant."""
-        # Pre-parse the text to bypass DoclingParser inside datapizza pipeline
-        raw_text = self._parse_code_text(str(source_path))
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8") as tmp:
+            tmp.write(raw_text)
+            tmp_path = tmp.name
 
         def _index(doc_id: str, source_path: str, extraction_result: dict) -> None:
-            vs = ingestion_manager.km.get_qdrant_vectorstore()
+            try:
+                vs = ingestion_manager.km.get_qdrant_vectorstore()
+                datapizza_pipeline = _build_datapizza_pipeline(vs, self.collection_name, self.chunk_max_char)
 
-            from datapizza.embedders import ChunkEmbedder
-            from datapizza.embedders.openai import OpenAIEmbedder
-            from datapizza.modules.splitters import NodeSplitter
-            from datapizza.pipeline import IngestionPipeline as DatapizzaPipeline
-            from src.app.config import EMBEDDING_MODEL
-
-            embedder_client = OpenAIEmbedder(api_key=OPENAI_API_KEY, model_name=EMBEDDING_MODEL)
-            datapizza_pipeline = DatapizzaPipeline(
-                modules=[
-                    NodeSplitter(max_char=self.chunk_max_char),
-                    ChunkEmbedder(client=embedder_client),
-                ],
-                vector_store=vs,
-                collection_name=self.collection_name,
-            )
-
-            # Codice files are plain text — pass raw_text directly
-            datapizza_pipeline.run(
-                text=raw_text,
-                metadata=build_payload(
-                    doc_id=doc_id,
-                    source_path=source_path,
-                    source_type=self.source_type,
-                    text="",
-                ),
-            )
+                datapizza_pipeline.run(
+                    file_path=tmp_path,
+                    metadata=build_payload(
+                        doc_id=doc_id,
+                        source_path=source_path,
+                        source_type=self.source_type,
+                        text="",
+                    ),
+                )
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
 
         return _index

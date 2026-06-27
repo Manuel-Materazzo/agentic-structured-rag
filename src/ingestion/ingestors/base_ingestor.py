@@ -62,21 +62,44 @@ class BaseIngestor(ABC):
         """Whether to use OCR vision fallback if LLM confidence is low."""
         return True
 
+    def parse_document(self, source_path: Path) -> str:
+        """
+        Parse a document to plain text using DoclingParser.
+        Subclasses can override this to add custom normalization.
+        """
+        try:
+            from datapizza.modules.parsers.docling import DoclingParser
+            parser = DoclingParser()
+            result = parser(str(source_path))
+
+            # Rendi l'iterazione sicura
+            nodes = result if isinstance(result, (list, tuple)) else [result]
+
+            texts = []
+            for n in nodes:
+                text = getattr(n, "text", None) or getattr(n, "content", "")
+                if text:
+                    texts.append(text)
+
+            text = "\n\n".join(texts)
+            if text.strip():
+                return text
+        except Exception as exc:
+            log.warning("DoclingParser failed for %s: %s", source_path, exc)
+
+        return Path(source_path).read_text(encoding="utf-8", errors="ignore")
+
     @abstractmethod
-    def write_db_entries(
-            self,
-            extraction_result: dict[str, Any],
-            doc_id: str,
-            facts_con: duckdb.DuckDBPyConnection
-    ) -> None:
-        """Write specific extracted entities to DuckDB."""
+    def write_db_entries(self, extraction_result: dict[str, Any], doc_id: str,
+                         facts_con: duckdb.DuckDBPyConnection) -> None:
         pass
 
     @abstractmethod
     def make_vector_indexer(
             self,
             ingestion_manager: IngestionManager,
-            source_path: Path
+            source_path: Path,
+            raw_text: str
     ) -> Callable[[str, str, dict], None]:
         """
         Return a callable that chunks, embeds, and upserts data into Qdrant.
@@ -86,12 +109,18 @@ class BaseIngestor(ABC):
 
     def ingest_single(self, ingestion_manager: IngestionManager, source_path: Path) -> str:
         """Ingest a single document through the full pipeline."""
-        vector_indexer = self.make_vector_indexer(ingestion_manager, source_path)
+
+        # 1. Parse the document ONCE
+        raw_text = self.parse_document(source_path)
+
+        # 2. Prepare the vector indexer passing the already parsed text
+        vector_indexer = self.make_vector_indexer(ingestion_manager, source_path, raw_text)
 
         return ingestion_manager.ingest_document(
             source_path=str(source_path),
             system_prompt=self.system_prompt,
             source_type=self.source_type,
+            raw_text=raw_text,  # Pass raw_text to avoid re-parsing in extract_entities
             use_vision_fallback=self.use_vision_fallback,
             vector_indexer=vector_indexer,
             post_write_callback=self.write_db_entries,

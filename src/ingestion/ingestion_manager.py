@@ -15,6 +15,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Callable, Any
 
+import duckdb
+
 from src.app.config import PARSED_DIR
 from src.ingestion.knowledge_manager import KnowledgeManager
 
@@ -61,8 +63,9 @@ class IngestionManager:
             self,
             source_path: str,
             system_prompt: str,
-            post_write_callback: Callable[[dict[str, Any], str, "duckdb.DuckDBPyConnection"], None] | None = None,
+            post_write_callback: Callable[[dict[str, Any], str, duckdb.DuckDBPyConnection], None] | None = None,
             source_type: str = "menu",
+            raw_text: Optional[str] = None,
             use_vision_fallback: bool = True,
             skip_embedding: bool = False,
             vector_indexer=None,
@@ -89,6 +92,7 @@ class IngestionManager:
                 system_prompt=system_prompt,
                 source_type=source_type,
                 doc_id=doc_id,
+                raw_text=raw_text,
             )
 
             if use_vision_fallback and extraction_result.get("parsing_confidence") == "low":
