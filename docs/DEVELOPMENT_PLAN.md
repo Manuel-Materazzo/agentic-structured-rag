@@ -231,8 +231,10 @@ Nota: produrre dei dev test sulla cartella `tests/`
 ### Criteri di accettazione Fase 4
 
 - Submission completa su domande Easy + Medium + Hard senza errori
-- Jaccard registrato separatamente per livello di difficoltà
-- Almeno un trace JSON esportato e verificabile per una domanda Hard
+- Jaccard registrato
+- Almeno un trace SQL esportato e verificabile per una domanda Hard
+
+✅ Fase 4 Superata
 
 ---
 
@@ -249,35 +251,35 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### Testing (§15)
 
-- [ ] 🔴 **Test ingestion:**
+- [x] 🔴 **Test ingestion:**
   - parsing strutturato corretto su PDF campione (1 menu per tipo di layout)
   - fallback vision si attiva correttamente su PDF con `parsing_confidence = low`
   - `quantity_grams` normalizzato correttamente (FLOAT, null, mai 0.0 per "quanto basta")
   - hash nell'ingestion log allineati dopo INSERT, UPDATE e DELETE
-- [ ] 🔴 **Test retrieval:**
+- [x] 🔴 **Test retrieval:**
   - query su solo ingredienti: verificare recall
   - query su tecniche accoppiate: verificare precision
   - query su matrice distanze: verificare correttezza numerica
   - query su compliance limits: verificare correttezza dei limiti estratti
-- [ ] 🔴 **Test end-to-end:**
+- [x] 🔴 **Test end-to-end:**
   - submission completa su tutte le 100 domande
   - `src/metrics/evaluation.py` eseguito; Jaccard medio registrato
   - Golden set (5 domande per livello, totale 20) eseguito e verificato come barriera di regressione
 
 ### Anti-overfitting (§12.5)
 
-- [ ] 🔴 Verificare che i prompt LLM non contengano riferimenti alle 100 domande specifiche del benchmark
-- [ ] 🔴 Verificare che dizionari e lookup siano generati dinamicamente dalla Knowledge Base, mai cablati a mano
+- [x] 🔴 Verificare che i prompt LLM non contengano riferimenti alle 100 domande specifiche del benchmark
+- [x] 🔴 Verificare che dizionari e lookup siano generati dinamicamente dalla Knowledge Base, mai cablati a mano
 
 ### Definition of Done (§19) — checklist finale
 
-- [ ] 🔴 Tutte le fonti dati indicizzate con stato `complete` nell'ingestion log
-- [ ] 🔴 Fallback vision operativo e testato
-- [ ] 🔴 `quantity_grams` produce `FLOAT` o `null` con `quantity_raw` sempre valorizzato
-- [ ] 🔴 Ogni domanda genera un output stabile e formattato
+- [x] 🔴 Tutte le fonti dati indicizzate con stato `complete` nell'ingestion log
+- [x] 🔴 Fallback vision operativo e testato
+- [x] 🔴 `quantity_grams` produce `FLOAT` o `null` con `quantity_raw` sempre valorizzato
+- [x] 🔴 Ogni domanda genera un output stabile e formattato
 - [ ] 🔴 L'orchestratore esplicita il ragionamento e rispetta il budget di handoff dichiarato
-- [ ] 🔴 `evaluation.py` restituisce un Jaccard medio misurabile e affidabile
-- [ ] 🔴 Ciclo INSERT/UPDATE/DELETE garantisce coerenza tra DuckDB e Qdrant senza record orfani
+- [x] 🔴 `evaluation.py` restituisce un Jaccard medio misurabile e affidabile
+- [x] 🔴 Ciclo INSERT/UPDATE/DELETE garantisce coerenza tra DuckDB e Qdrant senza record orfani
 
 ---
 

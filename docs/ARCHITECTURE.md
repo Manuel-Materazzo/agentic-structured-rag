@@ -1,4 +1,6 @@
-# Architettura MVP - Assistente AI per viaggiatori intergalattici
+# Architettura – Agentic Structured RAG
+
+---
 
 ## 1. Obiettivo
 
@@ -6,214 +8,103 @@ Costruire un MVP che risponda alle 100 domande del dataset `Dataset/domande.csv`
 
 Il sistema deve:
 
-- interpretare domande in linguaggio naturale
-- recuperare evidenze da PDF, CSV e pagine HTML
-- combinare informazioni semantiche e strutturate
-- produrre una lista deterministica di piatti
-- esportare un CSV nel formato richiesto dall'evaluation
+- interpretare domande in linguaggio naturale (italiano)
+- recuperare evidenze da PDF (menu, manuale, codice galattico), CSV (distanze) e HTML (blog)
+- combinare informazioni recuperate
+- produrre una lista di piatti e convertirla in ID tramite `dish_mapping.json`
+- esportare un CSV nel formato `row_id,result` richiesto dalla valutazione
 
-L'architettura adottata è **ibrida**:
-
-- un orchestratore agentico in loop gestisce pianificazione e delega
-- sub-agenti specializzati eseguono lookup deterministici (SQL) o semantici (vector)
-- LLM usato come orchestratore, normalizzatore e sintetizzatore — mai come unica fonte di verità
-
-
-## 2. Vincoli del task
-
-Dal `README.md` emergono alcuni vincoli importanti:
-
-- le domande sono 100
-- la difficoltà è distribuita così: `Easy` 48, `Medium` 28, `Hard` 18, `Impossible` 6
-- la ground truth non va usata a runtime
-- la submission deve contenere `row_id` e `result`
-- `result` è una stringa di ID separati da virgola
-- la metrica è Jaccard similarity media: conviene massimizzare precisione e recall dell'insieme finale di piatti
-
-Conseguenza pratica:
-
-- l'output deve essere stabile e spiegabile
-- gli errori di over-generation abbattono il punteggio Jaccard: il sistema deve filtrare bene i candidati
-- è preferibile una pipeline con controllo esplicito rispetto a un agente completamente libero
+La metrica di valutazione e la **Jaccard similarity media** tra la lista di ID predetti e quella della ground truth: massimizzare sia precision che recall dell'insieme finale e il criterio guida.
 
 ---
 
-## 3. Perché datapizza-ai
+## 2. Principio architetturale
 
-Il framework `datapizza-ai` è un requisito inattaccabile del progetto. Le primitive utili per questo caso d'uso sono:
-
-- `Agent` per orchestrazione con tool
-- `IngestionPipeline` per ingestione e indicizzazione documentale
-- `DagPipeline` per costruire workflow RAG componibili
-- `DoclingParser` e `NodeSplitter` per parsing e chunking
-- `ChunkEmbedder` e `OpenAIEmbedder` per embeddings
-- `QdrantVectorstore` per il retrieval
-- `ChatPromptTemplate` e `ToolRewriter` per riscrittura query e prompting
-- `ContextTracing` per osservabilità e debug
-
-**Nota operativa:** prima di avviare l'implementazione è necessaria una spike tecnica di 1-2 giorni per verificare empiricamente che le API citate siano stabili e complete nella versione corrente del repository. Un framework interno o semi-pubblico può avere breaking changes non documentati.
-[datapizza-ai repository](https://github.com/datapizza-labs/datapizza-ai)
-
----
-
-## 4. Principio architetturale
-
-Il sistema segue un modello a due livelli con ruoli distinti e non intercambiabili:
+Il sistema adotta un'architettura **ibrida a due livelli** con ruoli distinti e non intercambiabili:
 
 ```mermaid
 graph TD
-    A[RAW DOCUMENTS] --> B[CHUNKING + EMBEDDING + ENTITY EXTRACTION (via LLM)]
-    
-    subgraph Storage [Livello Data Store]
-        C[QDRANT <br><i>source of truth semantica</i>]
-        D[DUCKDB <br><i>vista strutturata derivata</i>]
+    A[Raw Documents] --> B[Offline Ingestion Pipeline]
+
+    subgraph Storage [Data Store]
+        C[Qdrant Vector Index]
+        D[DuckDB facts.db]
     end
-    
+
     B --> C
     B --> D
-    
-    C --> E[ORCHESTRATORE AGENTICO]
+
+    C --> E[Orchestrator]
     D --> E
-    
-    E --> F[SUB-AGENTI SPECIALIZZATI]
-    F --> G[SINTESI + NORMALIZZAZIONE]
-    G --> H[SUBMISSION CSV]
+
+    E --> F[SQL Agent]
+    E --> G[Vector Store Agent]
+    F --> H[DuckDB deterministic lookup]
+    G --> I[Qdrant semantic retrieval]
+    H --> E
+    I --> E
+
+    E --> J[Candidates JSON]
+    J --> K[Normalizer + Dish ID Mapper]
+    K --> L[submission.csv]
 ```
 
 | Componente | Ruolo |
 |------------|-------|
-| Qdrant | Memoria completa e interrogazione semantica |
-| DuckDB | Strato strutturato per vincoli, join e query deterministiche |
-| Orchestratore | Loop agentico che pianifica, delega e sintetizza |
-| Sub-agenti | Esecuzione specializzata di SQL o vector search |
+| **Qdrant** | Memoria semantica: chunk testuali con embedding e payload |
+| **DuckDB** (`facts.db`) | Fatti strutturati e relazionali: piatti, ingredienti, tecniche, licenze, distanze, compliance |
+| **Orchestratore** | Loop agentico che pianifica e delega |
+| **SQL Agent** | Traduce richieste in linguaggio naturale in SQL DuckDB e restituisce righe raw |
+| **Vector Store Agent** | Pianifica sub-query semantiche, le esegue su Qdrant, sintetizza i chunk |
 
-**Principio fondamentale:** DuckDB non è la fonte primaria della conoscenza, ma una **vista materializzata interrogabile** derivata dai chunk di Qdrant. Qdrant è il layer autorevole; DuckDB è ottimizzato per query deterministiche sul sottoinsieme di fatti estratti.
-
----
-
-## 5. Visione d'insieme
-
-```mermaid
-flowchart TD
-    A[Dataset / Knowledge Base] --> B[Offline ingestion runner]
-
-    B --> B1{doc_id già completo?}
-    B1 -->|Sì, stesso hash| B2[Skip – nessuna azione]
-    B1 -->|No o hash cambiato| B3[Invalidazione artefatti precedenti]
-    B3 --> C[DoclingParser → parsed/]
-
-    C --> C1{parsing_confidence?}
-    C1 -->|high| D[Structured Extractor LLM]
-    C1 -->|low| C2[Fallback Vision Parser]
-    C2 --> D
-
-    D --> F[(DuckDB – facts.db)]
-    C --> E[NodeSplitter + ChunkEmbedder]
-    E --> G[(Qdrant – vector index)]
-
-    F & G -.doc_id.- H[Ingestion Log – stato pipeline]
-
-    I[Question from domande.csv] --> J[Orchestratore Agentico]
-
-    J -->|handoff| K[Agente SQL]
-    J -->|handoff| L[Agente Qdrant]
-
-    K --> M[DuckDB lookup deterministico]
-    L --> N[Qdrant semantic retrieval]
-
-    M -->|risultato raw| J
-    N -->|chunk + score| J
-
-    J --> O[Sintesi LLM]
-    O --> P[Validator + Normalizer]
-    P --> Q[Dish ID mapping]
-    Q --> R[Submission CSV]
-```
+**Principio fondamentale:** DuckDB non e la fonte primaria della conoscenza, ma una vista materializzata derivata dai documenti originali. Qdrant contiene i chunk testuali autorizzati; DuckDB e ottimizzato per lookup e join deterministici.
 
 ---
 
-## 6. Fonti dati e ruolo di ciascuna
+## 3. Fonti dati e ruolo di ciascuna
 
-### 6.1 Menu PDF
-
-Contengono le informazioni più importanti per la maggior parte delle domande:
-
-- nome del ristorante, chef, pianeta, licenza dello chef
-- elenco di 10 piatti con ingredienti, tecniche e quantità
-- (alcuni) descrizione narrativa della preparazione
-
-Usi principali:
-
-- `Easy`: ingredienti e tecniche
-- `Medium`: pianeta e licenza
-- `Hard` e `Impossible`: evidence di base
-
-### 6.2 Manuale di Cucina PDF
-
-Contiene certificazioni, ordini professionali, tecniche culinarie e macrocategorie. Fondamentale per risolvere riferimenti indiretti (es. "un piatto preparato secondo i principi dell'Ordine X" → tecnica Y → lookup SQL).
-
-### 6.3 Distanze CSV
-
-Matrice delle distanze tra pianeti. Caricata direttamente in DuckDB come tabella `planet_distances` — non indicizzata in Qdrant.
-
-### 6.4 Codice Galattico PDF
-
-Limiti quantitativi sugli ingredienti e vincoli licenza-tecnica. Usato principalmente per `Hard` e `Impossible`.
-
-### 6.5 Blog post HTML
-
-Dettagli supplementari su alcuni ristoranti. Necessari solo per `Impossible`, in combinazione con il Codice Galattico.
+| Fonte | Posizione nella KB | Tipo | Indicizzata in Qdrant | Caricata in DuckDB |
+|---|---|---|---|---|
+| Menu ristorante | `Dataset/knowledge_base/menu/` | PDF | Si (`menu_index`) | Si (piatti, ingredienti, tecniche, licenze) |
+| Manuale di Cucina | `Dataset/knowledge_base/misc/` | PDF | Si (`manual_index`) | Si (`technique_taxonomy`, `technique_licenses`) |
+| Codice Galattico | `Dataset/knowledge_base/codice_galattico/` | PDF | Si (`code_index`) | Si (`compliance_rules`) |
+| Blog post | `Dataset/knowledge_base/blogpost/` | HTML | Si (`blog_index`) | No (solo metadati payload Qdrant) |
+| Distanze CSV | `Dataset/knowledge_base/misc/Distanze.csv` | CSV | No | Si (`planet_distances`) |
 
 ---
 
-## 7. Modello logico interno e architettura dello storage
+## 4. Schema DuckDB (`data/database/facts.db`)
 
-### 7.1 Entità
-
-- `Restaurant`: `name`, `chef`, `planet`, `chef_license`, `professional_orders`, `source_docs`, `source_chunks`
-- `Dish`: `name`, `restaurant_name`, `ingredients`, `techniques`, `preparation_notes`, `regulated_ingredients`, `source_docs`, `source_chunks`
-- `Technique`: `name`, `macro_category`, `required_license_level`
-- `PlanetDistance`: `from_planet`, `to_planet`, `distance_ly`
-- `ComplianceRule`: `ingredient`, `max_quantity_grams`, `required_technique`, `required_license`, `scope`, `source_docs`
-
-### 7.2 Asset persistenti
-
-```text
-data/
-  raw/          # copie dei file sorgente
-  parsed/       # output Docling normalizzato
-  database/     # DuckDB database file (facts.db), Qdrant collections (embedded), ingestion_log.db
-```
-
-### 7.3 Schema DuckDB (`facts.db`)
+Lo schema e definito e creato in `knowledge_manager.py`. Tutte le stringhe testuali sono normalizzate in lowercase al momento della scrittura.
 
 ```sql
+-- Registro di tutti i documenti ingeriti
 CREATE TABLE documents (
     doc_id       TEXT PRIMARY KEY,  -- sha256 del contenuto file
-    source_path  TEXT NOT NULL,     -- path relativo nella KB (es. menu/ristorante_x.pdf)
+    source_path  TEXT NOT NULL,
     source_type  TEXT NOT NULL,     -- 'menu' | 'manual' | 'codice' | 'blog' | 'distanze'
     ingested_at  TIMESTAMP NOT NULL
 );
 
 CREATE TABLE restaurants (
     id                  INTEGER PRIMARY KEY,
-    name                TEXT NOT NULL,
-    chef                TEXT,
-    planet              TEXT,
-    professional_orders TEXT[],     -- ordini professionali citati, TODO: extract in a separate table
+    name                TEXT NOT NULL,     -- lowercase
+    chef                TEXT,              -- lowercase
+    planet              TEXT,              -- lowercase
+    professional_orders TEXT[],            -- array di ordini professionali, lowercase
     doc_id              TEXT REFERENCES documents(doc_id)
 );
 
-CREATE TABLE IF NOT EXISTS chef_licenses (
+CREATE TABLE chef_licenses (
     restaurant_id INTEGER REFERENCES restaurants(id),
-    license_type  TEXT NOT NULL,
-    license_grade INTEGER NOT NULL,
+    license_type  TEXT NOT NULL,    -- shortcode: 'p','t','g','e+','mx','q','c','ltk'
+    license_grade INTEGER NOT NULL, -- romani convertiti in interi (I->1, II->2, ...)
     PRIMARY KEY (restaurant_id, license_type, license_grade)
 );
 
 CREATE TABLE dishes (
     id                INTEGER PRIMARY KEY,
-    name              TEXT NOT NULL,
+    name              TEXT NOT NULL,   -- lowercase
     restaurant_id     INTEGER REFERENCES restaurants(id),
     preparation_notes TEXT,
     doc_id            TEXT REFERENCES documents(doc_id)
@@ -221,611 +112,415 @@ CREATE TABLE dishes (
 
 CREATE TABLE dish_ingredients (
     dish_id         INTEGER REFERENCES dishes(id),
-    ingredient      TEXT NOT NULL,
-    quantity_grams  FLOAT,          -- NULL se non quantificabile o non specificato
-    quantity_raw    TEXT NOT NULL,  -- testo originale, sempre presente
+    ingredient      TEXT NOT NULL,    -- lowercase
+    quantity_grams  FLOAT,            -- NULL se non quantificabile
+    quantity_raw    TEXT NOT NULL,    -- testo originale (lowercase)
     is_regulated    BOOLEAN DEFAULT FALSE,
     PRIMARY KEY (dish_id, ingredient)
 );
 
-CREATE TABLE IF NOT EXISTS dish_techniques (
+CREATE TABLE dish_techniques (
     dish_id   INTEGER REFERENCES dishes(id),
-    technique TEXT NOT NULL,
+    technique TEXT NOT NULL,   -- lowercase
     PRIMARY KEY (dish_id, technique)
-);
-
-CREATE TABLE IF NOT EXISTS technique_taxonomy (
-    technique              TEXT PRIMARY KEY,
-    macro_category         TEXT NOT NULL
 );
 
 -- Popolata dal Manuale di Cucina
 CREATE TABLE technique_taxonomy (
-    technique              TEXT PRIMARY KEY,
-    macro_category         TEXT NOT NULL,
-    required_license_level TEXT
+    technique      TEXT PRIMARY KEY,  -- lowercase
+    macro_category TEXT NOT NULL
+);
+
+-- Popolata dal Manuale di Cucina: requisiti di licenza per tecnica (N:M)
+CREATE TABLE technique_licenses (
+    technique     TEXT REFERENCES technique_taxonomy(technique),
+    license_type  TEXT NOT NULL,
+    license_grade INTEGER NOT NULL,
+    PRIMARY KEY (technique, license_type, license_grade)
 );
 
 -- Popolata dal Distanze CSV
 CREATE TABLE planet_distances (
-    planet_a    TEXT NOT NULL,
-    planet_b    TEXT NOT NULL,
+    planet_a    TEXT NOT NULL,   -- lowercase
+    planet_b    TEXT NOT NULL,   -- lowercase
     distance_ly FLOAT NOT NULL,
     PRIMARY KEY (planet_a, planet_b)
 );
 
--- Popolata dal Codice Galattico TODO: structure rules into ingredients and licensing requirements, extract one rule per requirement
+-- Popolata dal Codice Galattico  TODO: structure rules into ingredients and licensing requirements, extract one rule per requirement
 CREATE TABLE compliance_rules (
     id               INTEGER PRIMARY KEY,
-    rule_type        TEXT NOT NULL,  -- 'ingredient_limit' | 'technique_license'
-    subject          TEXT NOT NULL,  -- nome ingrediente o tecnica
-    constraint_value TEXT NOT NULL, -- quantità massima o livello licenza richiesto
-    scope            TEXT,           -- contesto della norma (es. 'per piatto')
+    rule_type        TEXT NOT NULL,    -- 'ingredient_limit' | 'technique_license'
+    subject          TEXT NOT NULL,
+    constraint_value TEXT NOT NULL,
+    scope            TEXT,
     doc_id           TEXT REFERENCES documents(doc_id)
 );
 
--- Metadati di arricchimento per l'agente SQL
-CREATE TABLE IF NOT EXISTS schema_meta (
+-- Metadati per il SQL Agent (visibilita e descrizione di tabelle/colonne)
+CREATE TABLE schema_meta (
     table_name  TEXT NOT NULL,
-    column_name TEXT,           -- NULL means the annotation is for the whole table
+    column_name TEXT NOT NULL,  -- stringa vuota = annotazione sull'intera tabella
     visible     BOOLEAN NOT NULL DEFAULT TRUE,
     description TEXT,
     PRIMARY KEY (table_name, column_name)
 );
 ```
 
-Ogni tabella relazionale mantiene la colonna `doc_id` come foreign key verso la tabella `documents` per abilitare la tracciabilità della provenienza dei dati e la gestione coordinata del ciclo di vita.
+**Tabelle e colonne nascoste al SQL Agent** (tramite `schema_meta`): `documents` (intera tabella), `schema_meta` (intera tabella), colonne `doc_id` in `dishes`, `restaurants`, `compliance_rules`, colonna `is_regulated` in `dish_ingredients` (non ancora popolata).
 
-**Note sul campo quantità:**
+**Fuzzy matching nel SQL Agent:** l' SQL Agent usa `jaro_winkler_similarity(field, LOWER('value')) > 0.93` per i campi testuali al posto di `=` esatto, in modo da evitare typo utente e problemi di importazione, e applica `EXISTS`/`NOT EXISTS` sulle tabelle figlio (evitando JOIN multipli che causerebbero prodotti cartesiani).
 
-- `quantity_grams` è `FLOAT` con punto decimale (non virgola): compatibile con DuckDB e Python senza parsing aggiuntivo.
-- `quantity_raw` preserva sempre il testo originale estratto dal PDF come fallback e audit trail.
-- Casi come "quanto basta", "tracce", "a piacere" producono `quantity_grams = NULL` e non `0.0`, che avrebbe semantica diversa.
-- Durante l'ingestion, se `quantity_grams` risulta fuori da un range plausibile per l'ingrediente, viene loggato un warning e forzato a `NULL`.
+---
 
-### 7.4 Payload Qdrant
-Il payload associato ai vettori in Qdrant agisce come una vera e propria interfaccia contrattuale stabilita tra il layer semantico e quello strutturato. Ogni punto registrato in Qdrant deve obbligatoriamente includere questo payload minimo:
+## 5. Payload Qdrant
+
+Ogni punto in Qdrant include questo payload minimo, costruito dalla funzione `build_payload` in `ingestion_utils.py`:
 
 ```json
 {
   "chunk_id":    "uuid-generato-all-ingestione",
   "doc_id":      "sha256-del-file-sorgente",
-  "source_path": "menu/ristorante_x.pdf",
+  "source_path": "Dataset/knowledge_base/menu/ristorante_x.pdf",
   "source_type": "menu",
-  "page":        3,
-  "section":     "Piatto: Galassia di Sapori",
-  "restaurant":  "Ristorante X",
-  "dish":        "Galassia di Sapori",
+  "page":        null, 
+  "section":     null,
+  "restaurant":  "nome ristorante",
+  "dish":        null,
   "text":        "...testo del chunk..."
 }
 ```
-I campi `doc_id` e `chunk_id` forniscono la chiave di unione logica indispensabile per orchestrare update, delete o invalidazioni sui due motori di persistenza.
 
-### 7.5 Rapporto tra structured store e vector store
-
-| Store | Cosa contiene | Quando si usa |
-|---|---|---|
-| **DuckDB** | Fatti normalizzati, relazioni, regole | Lookup deterministici esatti |
-| **Qdrant** | Chunk testuali, embedding, metadati | Retrieval semantico, disambiguazione, fallback |
-
-#### Il ruolo del `doc_id` nella coerenza di sistema
-L'identificativo unico `doc_id` viene calcolato deterministicamente come `sha256(file_content)` del file sorgente e si ramifica simmetricamente all'interno dei due motori:
+I campi `doc_id` e `chunk_id` forniscono la chiave di join per le operazioni di delete/invalidazione sulle due basi dati. page, section e dish sono dei segnaposto per un possibile retrival avanzato futuro.
 
 ---
 
-## 8. Pipeline di ingestion
+## 6. Pipeline di ingestion
 
-### 8.1 Parsing e segnale di confidenza
+### 6.1 Struttura generale
 
-Il parsing via `DoclingParser` produce un output testuale che viene valutato dal LLM di entity extraction. Il LLM restituisce obbligatoriamente un campo di confidenza:
+La pipeline e suddivisa in tre fasi eseguite sequenzialmente dall'ingestor specifico per ogni fonte. Le fasi sono idempotenti: se un documento e gia in uno stato avanzato, le fasi precedenti vengono saltate grazie all'ingestion log.
 
-```json
-{
-  "dishes": [...],
-  "parsing_confidence": "low",
-  "parsing_issues": "struttura piatto-ingredienti non riconoscibile"
-}
+```
+Fase 1 - Parse   : DoclingParser (PDF/HTML) o lettura diretta (CSV/TXT)
+                   --> testo grezzo salvato in data/parsed/<doc_id>.txt
+Fase 2 - Extract : LLM entity extraction con prompt specifico per source_type
+                   --> scrittura in DuckDB (post_write_callback)
+Fase 3 - Embed   : datapizza IngestionPipeline (DoclingParser + NodeSplitter + ChunkEmbedder)
+                   --> upsert in Qdrant
 ```
 
-Se `parsing_confidence` è `low`, l'ingestion runner rilancia lo stesso documento in modalità **vision** prima di procedere. Il risultato vision alimenta lo stesso LLM di entity extraction con lo stesso prompt strutturato — il fallback è trasparente al resto della pipeline.
+### 6.2 Ingestors implementati
 
-La soglia di "low" è definita come: "non sono riuscito a estrarre entità coerenti", non "il testo era disordinato". Questo evita che il fallback vision diventi il path principale.
+Ogni ingestor estende `BaseIngestor` e sovrascrive i metodi appropriati:
 
-### 8.2 Entity extraction via LLM
+| Classe | File | Source Type | Qdrant Collection | DuckDB Tables |
+|---|---|---|---|---|
+| `MenuIngestor` | `menu_ingestor.py` | `menu` | `menu_index` | `restaurants`, `chef_licenses`, `dishes`, `dish_ingredients`, `dish_techniques` |
+| `CookManualIngestor` | `cook_manual_ingestor.py` | `manual` | `manual_index` | `technique_taxonomy`, `technique_licenses` |
+| `GalacticCodeIngestor` | `galactic_code_ingestor.py` | `codice` | `code_index` | `compliance_rules` |
+| `BlogIngestor` | `blog_ingestor.py` | `blog` | `blog_index` | nessuna (solo payload Qdrant) |
+| `DistancesIngestor` | `distances_ingestor.py` | `distanze` | nessuna | `planet_distances` |
 
-Tutta l'estrazione strutturata da PDF è delegata a un LLM con prompt strutturato, inclusa la normalizzazione delle quantità. Il LLM è istruito a:
+**`DistancesIngestor`** bypassa le fasi 1 e 3 completamente: legge il CSV con Pandas e scrive direttamente in `planet_distances`, senza LLM ne Qdrant.
 
-- estrarre ingredienti, tecniche, quantità, licenze e pianeti per ogni piatto
-- normalizzare le quantità in grammi con punto decimale dove possibile
-- segnalare esplicitamente i casi non quantificabili
-- restituire JSON con schema fisso e nessun testo libero aggiuntivo
+**`BlogIngestor`** utilizza `sectionize_html` (BeautifulSoup) come parser primario per strutturare i contenuti HTML per heading (h1/h2/h3), con fallback a `DoclingParser`. Non scrive tabelle relazionali in DuckDB.
 
-### 8.3 Ciclo di vita dei documenti
+### 6.3 Segnale di confidenza e fallback vision
 
-Per assicurare la massima consistenza ed evitare che modifiche sui file della Knowledge Base lascino i database in uno stato divergente, viene introdotta una base dati dedicata al tracking dello stato dei file (`ingestion_log.db`), che ospita la tabella seguente:
+Il LLM di entity extraction restituisce obbligatoriamente `parsing_confidence: "high" | "low"`. Se il valore e `"low"`, la pipeline attiva il **vision fallback** (`vision_fallback.py`):
+
+1. **DoclingParser con EasyOCR** — gestisce PDF scansionati
+2. **LLM dotato di vision** — converte le pagine PDF in immagini JPEG base64 e le invia al modello (max 10 pagine)
+
+Il `BlogIngestor` e il `DistancesIngestor` disabilitano esplicitamente il vision fallback (`use_vision_fallback = False`).
+
+### 6.4 Modello Pydantic per i menu
+
+La struttura dell'output LLM per i menu e definita dal modello `RestaurantData` in `model/menu.py`:
+
+```
+RestaurantData
++-- restaurant: Restaurant (name, chef, planet, professional_orders)
++-- dishes: List[Dish]
+|   +-- Dish (name, techniques, preparation_notes)
+|       +-- ingredients: List[Ingredient] (name, quantity_grams: float|null, quantity_raw: str)
++-- licenses: List[License] (license_type: shortcode, license_grade: int)
++-- parsing_confidence: "high" | "low"
++-- parsing_issues: str | null
+```
+
+Lo schema JSON del modello Pydantic viene iniettato dinamicamente nel system prompt del `MenuIngestor`.
+
+TODO: fare lo stesso sugli altri schema.
+
+### 6.5 Post-processing delle quantita
+
+Dopo l'entity extraction dei menu, `_postprocess_quantities` in `structured_extraction.py` imposta a `NULL` i valori `quantity_grams` che sono `0.0`, negativi, o superiori a 100 000 g (100 kg).
+
+### 6.6 Ciclo di vita dei documenti (ingestion log)
+
+Il file separato `data/database/ingestion_log.db` traccia lo stato di ogni documento:
 
 ```sql
 CREATE TABLE ingestion_log (
     doc_id        TEXT PRIMARY KEY,
-    source_path   TEXT NOT NULL UNIQUE,  -- path relativo nella KB
-    content_hash  TEXT NOT NULL,         -- sha256 del contenuto (= doc_id)
-    status        TEXT NOT NULL,         -- ciclo degli stati transizionali
+    source_path   TEXT NOT NULL UNIQUE,
+    content_hash  TEXT NOT NULL,   -- uguale a doc_id (sha256 del file)
+    status        TEXT NOT NULL,
     last_updated  TIMESTAMP NOT NULL,
-    error_message TEXT                   -- null se nessun errore
+    error_message TEXT
 );
-
-Lo stato di ogni documento è tracciato in `ingestion_log.db`:
-
-```
-pending → parsing → parsed → extracting → extracted → embedding → indexed → complete
-                                                                           ↘ failed
 ```
 
-#### Protocollo INSERT
+Transizioni di stato:
 
-```python
-def ingest_document(source_path: str):
-    content = read_file(source_path)
-    doc_id = sha256(content)
-
-    existing = ingestion_log.get(source_path)
-    if existing and existing.doc_id == doc_id and existing.status == "complete":
-        return  # già processato, skip
-
-    ingestion_log.upsert(source_path, doc_id, status="pending")
-
-    try:
-        # 1. Parsing dei testi
-        ingestion_log.set_status(doc_id, "parsing")
-        parsed = docling_parser.parse(content)
-
-        # segnale di confidenza dal LLM
-        extraction_result = structured_extractor.extract(parsed, doc_id=doc_id)
-        if extraction_result.parsing_confidence == "low":
-            parsed = vision_parser.parse(content)
-            extraction_result = structured_extractor.extract(parsed, doc_id=doc_id)
-
-        save_to_parsed_dir(doc_id, parsed)
-        ingestion_log.set_status(doc_id, "parsed")
-
-        # 2. Scrittura nello structured store
-        ingestion_log.set_status(doc_id, "extracting")
-        duckdb.write(extraction_result.facts)
-        ingestion_log.set_status(doc_id, "extracted")
-
-        # 3. Indicizzazione nel vector store
-        ingestion_log.set_status(doc_id, "embedding")
-        chunks = node_splitter.split(parsed, doc_id=doc_id)
-        embeddings = chunk_embedder.embed(chunks)
-        qdrant.upsert(embeddings)
-        ingestion_log.set_status(doc_id, "indexed")
-
-        ingestion_log.set_status(doc_id, "complete")
-    except Exception as e:
-        ingestion_log.set_status(doc_id, "failed", error=str(e))
-        raise
+```
+pending --> parsing --> parsed --> extracting --> extracted --> embedding --> indexed --> complete
+                                                                                    |
+                                                                                    +--> failed
 ```
 
-#### Protocollo UPDATE (Documento modificato o sostituito)
-L'aggiornamento scatta quando si rileva che `sha256(new_content) != ingestion_log[source_path].doc_id`. Al fine di blindare la consistenza, la pipeline applica rigorosamente il principio **"prima si invalida il vecchio, poi si inserisce il nuovo"**:
+**Protocollo UPDATE:** quando `sha256(new_content) != ingestion_log[source_path].doc_id`, la pipeline applica "invalida prima, reinserisci dopo":
 
-```python
-def update_document(source_path: str):
-    new_content = read_file(source_path)
-    new_doc_id = sha256(new_content)
+1. Purga i punti Qdrant (`filter: doc_id = old_doc_id`) su tutte le 4 collection
+2. Delete a cascata da DuckDB: `dish_techniques` --> `dish_ingredients` --> `dishes` --> `restaurants` / `compliance_rules` --> `documents`
+3. Elimina il file `data/parsed/<old_doc_id>.txt`
+4. Re-ingestione completa
 
-    existing = ingestion_log.get(source_path)
-    if not existing:
-        return ingest_document(source_path)
-    if existing.doc_id == new_doc_id:
-        return
-
-    old_doc_id = existing.doc_id
-
-    # 1. Purga dal vector index
-    qdrant.delete(filter={"doc_id": old_doc_id})
-
-    # 2. Rimozione a cascata da DuckDB
-    duckdb.execute("DELETE FROM dish_techniques WHERE dish_id IN (SELECT id FROM dishes WHERE doc_id = ?)", [old_doc_id])
-    duckdb.execute("DELETE FROM dish_ingredients WHERE dish_id IN (SELECT id FROM dishes WHERE doc_id = ?)", [old_doc_id])
-    duckdb.execute("DELETE FROM dishes WHERE doc_id = ?", [old_doc_id])
-    duckdb.execute("DELETE FROM restaurants WHERE doc_id = ?", [old_doc_id])
-    duckdb.execute("DELETE FROM compliance_rules WHERE doc_id = ?", [old_doc_id])
-    duckdb.execute("DELETE FROM documents WHERE doc_id = ?", [old_doc_id])
-
-    # 3. Pulizia parsed dir
-    delete_from_parsed_dir(old_doc_id)
-
-    # 4. Nuova ingestione
-    ingest_document(source_path)
-```
-
-#### Protocollo DELETE
-
-```python
-def delete_document(source_path: str):
-    existing = ingestion_log.get(source_path)
-    if not existing:
-        return
-
-    doc_id = existing.doc_id
-    qdrant.delete(filter={"doc_id": doc_id})
-
-    duckdb.execute("DELETE FROM dish_techniques WHERE dish_id IN (SELECT id FROM dishes WHERE doc_id = ?)", [doc_id])
-    duckdb.execute("DELETE FROM dish_ingredients WHERE dish_id IN (SELECT id FROM dishes WHERE doc_id = ?)", [doc_id])
-    duckdb.execute("DELETE FROM dishes WHERE doc_id = ?", [doc_id])
-    duckdb.execute("DELETE FROM restaurants WHERE doc_id = ?", [doc_id])
-    duckdb.execute("DELETE FROM compliance_rules WHERE doc_id = ?", [doc_id])
-    duckdb.execute("DELETE FROM documents WHERE doc_id = ?", [doc_id])
-
-    delete_from_parsed_dir(doc_id)
-    ingestion_log.delete(source_path)
-```
-
-#### Recovery e health check
-
-- I record in stato `failed` vengono ritentati da un worker dedicato (`retry_failed()`).
-- All'avvio, prima di abilitare il runtime delle query, viene eseguito un controllo di coerenza O(n_documenti) tra i `doc_id` in DuckDB e Qdrant. Gli elementi orfani vengono rielaborati via `update_document`.
-
-### 8.4 Strategie di chunking per tipo di fonte
-
-| Fonte | Strategia |
-|---|---|
-| Menu PDF | Chunk per piatto/sezione; fallback 700-1200 caratteri |
-| Manuale di Cucina | Chunk per sezioni e sottosezioni; metadata: `section_title`, `topic` |
-| Codice Galattico | Chunk per sezioni normative; estrazione strutturata verso `compliance_rules` |
-| Distanze CSV | Caricamento diretto in DuckDB; non indicizzato in Qdrant |
-| Blog HTML | `DoclingParser` se preserva struttura; fallback BeautifulSoup; chunk semantici con gerarchia h1/h2/h3 |
+**Recovery:** `IngestionManager.retry_failed()` ritenta tutti i documenti in stato `failed`. `health_check()` confronta i `doc_id` completi nel log con quelli presenti in `documents` DuckDB e re-ingerisce gli orfani.
 
 ---
 
-## 9. Architettura agentica a runtime
+## 7. Architettura agentica a runtime
 
-### 9.1 Principio generale
+### 7.1 Orchestratore
 
-Il runtime è strutturato come un **loop agentico a tre livelli**:
+Implementato in `src/app/orchestrator.py` usando la primitiva `Agent` di datapizza-ai in modalita ReAct.
 
-```
-ORCHESTRATORE (loop principale)
-    ↓ handoff
-SUB-AGENTE SQL  /  SUB-AGENTE QDRANT  (esecuzione specializzata)
-    ↓ risultato raw
-ORCHESTRATORE (lettura, decisione, eventuale nuovo handoff)
-    ↓ quando ha tutto
-SINTESI FINALE
-```
+**Responsabilita:**
+- ricevere la domanda
+- pianificare il percorso di retrieval e il budget di handoff
+- delegare ai sub-agenti tramite esattamente due tool
+- leggere i risultati e iterare fino alla convergenza
+- produrre il JSON finale `{"candidates": ["Dish Name 1", ...]}`
 
-L'orchestratore non è un router statico: pianifica la strada, esplicita il ragionamento prima di ogni handoff, legge il risultato e decide autonomamente se fare un ulteriore handoff o se ha già abbastanza evidenze per rispondere.
-
-### 9.2 Orchestratore
-
-**Responsabilità:**
-- ricevere la domanda e il `row_id`
-- leggere lo schema DuckDB per capire quali entità e relazioni sono disponibili
-- pianificare il percorso di retrieval esplicitando il ragionamento
-- stimare la complessità della domanda e auto-assegnarsi un budget di handoff
-- delegare ai sub-agenti tramite **due soli tool in linguaggio naturale** (vedi §11.2)
-- leggere i risultati raw e decidere se convergere o fare un altro handoff
-- sintetizzare la risposta finale
-
-**Tool esposti all'orchestratore: solo due.**
-L'orchestratore non dispone di lookup atomici specializzati (per ingrediente, per tecnica, per pianeta, ecc.). Dispone esclusivamente di:
+**Tool esposti:**
 
 ```python
-call_sql_agent(request: str) -> dict   # delega NL all'agente SQL
-call_qdrant_agent(request: str) -> dict  # delega NL all'agente Qdrant
+call_sql_agent(request: str) -> str
+# Delega una richiesta NL all'SQL Agent.
+# Restituisce: "SQL agent search successful. Found N results: [...]"
+# In caso di errore: "SQL agent failed. Error: ..."
+
+call_vector_store_agent(request: str) -> str
+# Delega una query semantica NL al Vector Store Agent.
+# Restituisce: "Vector Store agent search successful. Findings: <testo sintetizzato>"
+# Il tool e registrato nell'agente col nome "call_qdrant_agent"
 ```
 
-La traduzione da linguaggio naturale a SQL — incluse le query che attraversano più tabelle in un'unica chiamata — è responsabilità dell'agente SQL, non dell'orchestratore. Esporre all'orchestratore un menu di lookup atomici (per ingrediente, per tecnica, per pianeta, per distanza…) creerebbe una falsa separazione: richiederebbe all'orchestratore di scegliere il tool giusto, il che equivale ad aver già capito la domanda, ma senza poter sfruttare la capacità di composizione SQL dell'agente. Inoltre i lookup atomici non coprono le query ibride più comuni (es. "piatti di ristoranti su pianeti entro 10 anni luce che usano tecniche di licenza B"), che richiedono comunque un join multi-tabella.
+**Parametri chiave:**
+- `max_steps=10` — limite massimo di handoff nel loop ReAct
+- `terminate_on_text=True` — il loop si ferma quando l'agente produce testo libero (il JSON finale)
+- Budget di handoff per difficolta: Easy <= 2, Medium <= 3, Hard <= 5 (configurabili da env)
 
-**Budget di handoff:**
-L'orchestratore stima la complessità prima di iniziare il loop e si auto-vincola:
-- domande semplici (ingrediente/tecnica espliciti): max 1-2 handoff
-- domande medie (pianeta, licenza): max 3 handoff
-- domande complesse (distanze, compliance, blog): max 5 handoff
+**Formato risposta atteso dall'agente:**
 
-Il budget è una stima, non un limite rigido invalicabile, ma l'orchestratore deve esplicitare nel proprio ragionamento se decide di superarlo e perché.
-
-**Gestione dei zero results su SQL:**
-Zero risultati dall'agente SQL non sono una risposta finale. Sono un segnale che il termine cercato potrebbe non essere un valore diretto nella tabella (es. un ordine professionale invece di una tecnica). In questo caso l'orchestratore deve fare un handoff a Qdrant per disambiguare prima di riprovare con SQL.
-
-**Formato del piano (serializzabile per debug):**
 ```json
-{
-  "question": "Quali piatti usano tecniche dell'Ordine dei Cuochi Quantistici?",
-  "reasoning": "L'ordine professionale non è una colonna DuckDB. Devo prima risolvere quale tecnica corrisponde all'ordine tramite Qdrant, poi filtrare su dish_techniques.",
-  "budget": 3,
-  "next_handoff": "qdrant",
-  "query": "Ordine dei Cuochi Quantistici tecnica associata"
-}
+{"candidates": ["Nome Piatto 1", "Nome Piatto 2"]}
 ```
 
-### 9.3 Agente SQL
+Se i candidati non sono una lista valida, l'orchestratore restituisce `{"candidates": [], "error": "..."}`.
 
-**Responsabilità:**
-- ricevere una richiesta in linguaggio naturale dall'orchestratore
-- tradurre in SQL corretto sullo schema DuckDB noto
+### 7.2 SQL Agent
+
+Implementato in `src/app/agents/sql_agent.py` come layer di traduzione NL-->SQL con retry.
+
+**Responsabilita:**
+- ricevere una richiesta NL
+- generare SQL corretto per DuckDB con schema fornito dinamicamente da `get_schema_overview`
 - eseguire la query
-- ritornare il risultato raw con nomi colonne
+- restituire `SQLAgentResult(columns, rows, sql, error)`
 
-**Loop interno:** se la query fallisce per errore sintattico o ritorna un errore di schema, l'agente può fare un auto-retry con auto-correzione — massimo 2 tentativi. Non fa loop esplorativi. Non interpreta il risultato: restituisce i dati così come sono.
+**Loop interno:** fino a `max_retries=2` tentativi. In caso di errore sintattico o di schema, il prompt viene arricchito con il messaggio di errore per l'auto-correzione.
 
-**Non sintetizza:** la decisione su cosa fare con il risultato appartiene all'orchestratore.
+**Schema presentato al LLM:** `get_schema_overview` in `sql_utils.py` filtra le tabelle e le colonne marcate `visible=FALSE` in `schema_meta`. Include anche le descrizioni delle colonne come commenti SQL (es. shortcode licenze, formato grade).
 
-### 9.4 Agente Qdrant
+**Regole SQL critiche (nel system prompt):**
+- Usare `jaro_winkler_similarity(field, LOWER('value')) > 0.93` per i campi testo (mai `=` esatto)
+- Usare `EXISTS`/`NOT EXISTS` sulle tabelle figlio (mai `JOIN` multipli sullo stesso figlio)
+- Single quote escapate raddoppiandole: `L''aquila`
 
-**Responsabilità:**
-- ricevere una query semantica dall'orchestratore
-- eseguire il retrieval sulla collection appropriata
-- ritornare chunk con score e metadata
+### 7.3 Vector Store Agent
 
-**Loop interno:** se il retrieval produce zero risultati o score troppo bassi, l'agente può riformulare la query e riprovare su una collection diversa — massimo 2 tentativi. Non sintetizza e non filtra per contenuto: restituisce i chunk così come sono con i relativi score.
+Implementato in `src/app/agents/vector_store_agent.py` come micro-orchestratore semantico a tre fasi.
 
-**Collection disponibili:**
-- `menu_index`
-- `manual_index`
-- `code_index`
-- `blog_index`
+**Responsabilita:**
+- ricevere una query semantica NL dall'orchestratore
+- pianificare sub-query per collection diverse (Planner LLM)
+- eseguire le ricerche in Qdrant con embedding OpenAI
+- sintetizzare i chunk grezzi in una risposta pulita (Synthesizer LLM)
+- restituire `VectorStoreResult(sub_queries, raw_chunks_collected, synthesized_answer, error)`
 
-### 9.5 Tre rami decisionali
+**Fasi interne:**
 
-L'orchestratore può scegliere tra tre strategie, combinabili nel corso del loop:
+1. **Planner** — il LLM riceve la richiesta e produce:
+   `{"queries": [{"collection": "...", "query": "..."}], "rationale": "..."}`.
+   Le collection non valide vengono filtrate; fallback su `menu_index` con la query originale.
 
-| Ramo | Quando | Rischio |
-|---|---|---|
-| Solo DuckDB | Entità esplicite, lookup deterministico sufficiente | Basso |
-| DuckDB + Qdrant | Entità parzialmente ambigue o vincoli normativi complessi | Medio |
-| Solo Qdrant | Domande narrative, dettagli da blog, contesto non modellabile | Alto (over-generation) |
+2. **Retrieval** — per ogni sub-query: embed con `OpenAIEmbedder`, ricerca su Qdrant con `k=3`.
+   Filtro score >= 0.4. I chunk vengono collezionati con score e source.
 
-Il ramo "solo Qdrant" va usato con parsimonia. Anche quando il retrieval semantico è necessario, la validazione finale sul `dish_mapping.json` funge da barriera contro candidati inventati.
+3. **Synthesizer** — il LLM sintetizza i chunk in una risposta concisa e fattuale per l'orchestratore.
+   Se non ci sono chunk: `"INSUFFICIENT DATA: No relevant chunks found in vector store."`.
 
----
+**Collection disponibili** (da `config.py`):
 
-## 10. Flusso di risposta
-
-### 10.1 Query understanding
-
-Input: testo domanda e `row_id`.
-Output: piano di retrieval con entità estratte, vincoli logici, ragionamento esplicito e budget di handoff stimato.
-
-### 10.2 Evidence collection
-
-L'orchestratore esegue in sequenza logica gli handoff pianificati, collezionando risultati SQL e chunk vettoriali con riferimenti ai file di provenienza.
-
-### 10.3 Candidate generation
-
-Viene calcolata l'intersezione o l'unione dei piatti candidati applicando i vincoli estratti a livello di query database (es. filtrando i piatti i cui ristoranti distano oltre la soglia stabilita o i cui ingredienti violano i tetti quantitativi del Codice Galattico).
-
-### 10.4 Answer synthesis
-
-L'LLM riceve la domanda originale più le sole evidenze emerse dalle fasi precedenti. Il prompt impone la generazione esclusiva dei nomi dei piatti puliti. Segue una fase di validazione stringente per normalizzare la stringa ed effettuare il controllo di esistenza nel file di mapping.
+| Collection | Contenuto |
+|---|---|
+| `menu_index` | Menu ristorante: piatti, ingredienti, tecniche |
+| `manual_index` | Manuale di Cucina: tassonomia tecniche, licenze, macro-categorie |
+| `code_index` | Codice Galattico: compliance, limiti ingredienti, vincoli licenza |
+| `blog_index` | Blog post narrativi: anomalie, contesto ristorante |
 
 ---
 
-## 11. Uso di datapizza-ai nel runtime
+## 8. Normalizzazione e mapping verso gli ID
 
-### 11.1 Componenti consigliati
+### 8.1 Normalizzazione testo
 
-- `OpenAIClient` configurabile da variabili d'ambiente
-- `Agent` per la gestione controllata delle chiamate ai tool deterministici
-- `DagPipeline` per la strutturazione del grafo di retrieval
-- `ContextTracing` agganciato ad OpenTelemetry
+La funzione `normalize_text` in `normalizer_utils.py` applica:
+- NFKC Unicode normalization
+- trim e unificazione whitespace
+- standardizzazione apostrofi
+- casefold
 
-### 11.2 Tool esposti all'orchestratore
+### 8.2 Mapping
 
-L'orchestratore dispone di **esattamente due tool**, entrambi in linguaggio naturale:
+Il file `Dataset/ground_truth/dish_mapping.json` e usato **esclusivamente** come:
+1. dizionario di conversione da nome piatto a ID intero
+2. barriera di validazione per escludere piatti non presenti nella KB
 
-```python
-call_sql_agent(request: str) -> dict
-# Delega una richiesta in linguaggio naturale all'agente SQL.
-# L'agente traduce autonomamente in SQL sullo schema DuckDB noto,
-# gestisce join multi-tabella, esegue la query e restituisce il risultato raw.
+Il mapping avviene in `generate_kaggle_submission_file.py`:
+- Lookup esatto (case-sensitive)
+- Lookup case-insensitive (strip + casefold)
 
-call_qdrant_agent(request: str) -> dict
-# Delega una query semantica in linguaggio naturale all'agente Qdrant.
-# L'agente sceglie la collection appropriata, esegue il retrieval
-# e restituisce chunk con score e metadata.
-```
-
-**Perché non lookup atomici separati.**
-Una lista di tool specializzati (`lookup_dish_by_ingredient`, `lookup_planet_distance`, `lookup_compliance_limit`, ecc.) introduce un problema strutturale: per scegliere il tool giusto, l'orchestratore deve già aver interpretato la domanda, ma senza poter sfruttare la capacità di composizione SQL dell'agente sottostante. Il risultato è rigidità senza vantaggio: i lookup atomici non coprono le query ibride più comuni (es. "piatti di ristoranti su pianeti entro 10 anni luce che usano tecniche di licenza B"), che richiedono un join multi-tabella che un agente SQL con schema completo gestisce in un'unica chiamata. La complessità di routing viene spostata sull'orchestratore invece di tenerla dove appartiene, cioè nell'agente SQL.
-
-**Tool deterministici interni all'agente SQL.**
-Le funzioni di lookup atomico (`lookup_dish_by_ingredient`, `lookup_planet_distance`, ecc.) possono comunque esistere come helper Python interni all'agente SQL — usate dall'agente per costruire o validare le proprie query — ma non sono esposte all'orchestratore.
-
-### 11.3 Esempio di organizzazione del grafo
-
-```python
-dag = DagPipeline()
-dag.add_module("orchestrator", Agent(
-    client=llm,
-    tools=[call_sql_agent, call_qdrant_agent],  # due soli tool NL
-    system_prompt=ORCHESTRATOR_SYSTEM_PROMPT
-))
-dag.add_module("normalizer", answer_normalizer)
-dag.add_module("mapper", dish_id_mapper)
-```
+Il fuzzy matching (tramite `difflib.get_close_matches`, cutoff 0.9) e disponibile in `map_dish_names_to_ids` e viene usato durante la valutazione offline (`run_inference.py`).
 
 ---
 
-## 12. Strategia di reasoning per livello di difficoltà
-
-### 12.1 Easy
-
-Match lessicale immediato su DuckDB. L'orchestratore converge tipicamente in 1 handoff. L'LLM interviene solo in presenza di parafrasi o sinonimi non normalizzati.
-
-### 12.2 Medium
-
-Incrocio tra le tabelle `dishes`, `restaurants` e i parametri relativi a pianeti o licenze degli chef. Tipicamente 2-3 handoff.
-
-### 12.3 Hard
-
-Risoluzione di vincoli geometrici (distanze) e tassonomici (licenze richieste per specifiche tecniche). I criteri di inclusione/esclusione vengono risolti tramite algebra degli insiemi in SQL, fornendo all'LLM un set di candidati già filtrato.
-
-### 12.4 Impossible
-
-Analisi incrociata tra tetti quantitativi del Codice Galattico e anomalie narrative nei blog post. Approccio iper-conservativo in fase di generazione candidati per evitare penalizzazioni Jaccard da over-generation.
-
-### 12.5 Anti-overfitting
-
-- I prompt si concentrano sull'estrazione di entità e vincoli astratti, mai sulla fisionomia delle 100 domande specifiche del benchmark.
-- Tutti i dizionari di controllo sono compilati dinamicamente analizzando la Knowledge Base, mai cablati a mano osservando la ground truth.
-
----
-
-## 13. Normalizzazione finale verso gli ID
-
-### 13.1 Mapping
-
-Il file `Dataset/ground_truth/dish_mapping.json` funge esclusivamente da:
-- dizionario di conversione finale da stringa (nome piatto) a ID
-- barriera di validazione per escludere risposte inventate
-
-### 13.2 Regole di normalizzazione
-
-Rimozione di spazi bianchi, standardizzazione caratteri speciali e apostrofi, confronto case-insensitive, rimozione duplicati, ordinamento numerico crescente degli ID. In caso di fallimento del match, si tenta fuzzy matching controllato; se l'incertezza persiste, il candidato viene rimosso dal set di sottomissione.
-
----
-
-## 14. Osservabilità e debugging
-
-Grazie all'integrazione nativa di `ContextTracing` via OpenTelemetry, l'applicazione registra ad ogni esecuzione:
-
-- la domanda originale e il `row_id`
-- il piano di retrieval con ragionamento esplicito dell'orchestratore
-- ogni handoff: tipo (SQL/Qdrant), input, output raw, tempo di risposta
-- i chunk vettoriali estratti con score
-- i piani SQL eseguiti su DuckDB
-- i tassi di errore in fase di mapping degli ID
-- i warning di normalizzazione quantità (`quantity_grams` forzato a NULL)
-- i fallback vision attivati durante l'ingestion
-
-Il piano di retrieval serializzabile in JSON (sezione 9.2) abilita il regression testing offline: è possibile confrontare i piani prodotti su versioni diverse del sistema senza eseguire la pipeline completa.
-
----
-
-## 15. Testing strategy
-
-### 15.1 Test di ingestion
-
-- corretto parsing strutturato dei PDF (incluso il segnale di confidenza)
-- corretto fallback vision quando `parsing_confidence = low`
-- corretta normalizzazione delle quantità in `quantity_grams`
-- corretto allineamento degli hash nell'ingestion log
-
-### 15.2 Test di retrieval
-
-Batterie di test mirate su query di soli ingredienti, tecniche accoppiate, matrici di distanza e calcolo dei limiti di compliance, misurando recall e precision dei motori in isolamento.
-
-### 15.3 Test end-to-end
-
-Generazione della submission completa su `domande.csv` ed esecuzione automatica di `src/evaluation.py` per misurare l'indice Jaccard medio. Un golden set ridotto (5 query per livello di difficoltà) viene eseguito ad ogni commit come barriera di regressione rapida.
-
----
-
-## 16. Struttura repository consigliata
+## 9. Struttura repository effettiva
 
 ```text
 src/
+  api.py                      # FastAPI server (lifespan: health_check + init agents)
+  ingestion.py                # Entry point CLI per l'ingestion completa
   app/
-    main.py
-    config.py
-    orchestrator.py        # loop agentico principale
+    __init__.py
+    config.py                 # Configurazione centralizzata (env vars + defaults)
+    orchestrator.py           # Orchestratore agentico (datapizza Agent)
     agents/
-      sql_agent.py
-      qdrant_agent.py
-    tools/
-      lookup_tools.py      # tool deterministici SQL
-      validation_tools.py
-    answer_normalizer.py
-    submission.py
+      sql_agent.py            # LLM->SQL translator con retry
+      vector_store_agent.py   # Plan->Retrieve->Synthesize pipeline semantica
   ingestion/
-    runner.py
-    menu_ingestion.py
-    cook_manual_ingestion.py
-    galactic_code_ingestion.py
-    blog_ingestion.py
-    distances_ingestion.py
-    structured_extraction.py  # LLM entity extractor
-    vision_fallback.py
+    __init__.py
+    ingestion_manager.py      # Lifecycle: ingest / update / delete / retry / health_check
+    knowledge_manager.py      # Init DuckDB + Qdrant; CRUD di basso livello
+    structured_extraction.py  # LLM entity extraction + parse_json_response + post-processing
+    vision_fallback.py        # DoclingParser OCR + LLM vision (GPT-4.1-mini) fallback
+    ingestors/
+      base_ingestor.py        # ABC con 3 fasi (parse / extract / embed)
+      menu_ingestor.py        # Menu PDF --> DuckDB + Qdrant menu_index
+      cook_manual_ingestor.py # Manuale PDF --> DuckDB + Qdrant manual_index
+      galactic_code_ingestor.py # Codice PDF --> DuckDB + Qdrant code_index
+      blog_ingestor.py        # HTML blog --> Qdrant blog_index (nessuna tabella DuckDB)
+      distances_ingestor.py   # CSV --> DuckDB planet_distances (nessun LLM, nessun Qdrant)
+  model/
+    menu.py                   # Pydantic models: RestaurantData, Dish, Ingredient, License
+  evaluation/
+    generate_kaggle_submission_file.py  # dish_mapping loader + export submission CSV
+    run_inference.py                    # SQL Agent inference batch su domande_con_risposte.csv
+    llm_evaluation.py                  # LLM judge: PASS/PARTIAL/FAIL/EMPTY/ERROR
+    jaccard_evaluation.py              # CLI: calcola Jaccard locale vs ground truth
   metrics/
-    evaluation.py
+    jaccard_similarity.py     # Implementazione Jaccard (Kaggle-compatible)
+  utils/
+    ingestion_utils.py        # build_payload, sectionize_html, split_text, delete_qdrant_points_by_doc_id
+    normalizer_utils.py       # normalize_text, map_dish_names_to_ids, extract_dishes_from_rows
+    sql_utils.py              # get_schema_overview, run_sql, QueryResult
+    validation_utils.py       # Validation helpers
+    argparser_utils.py        # CLI argument parsers
 data/
-  raw/
-  parsed/
-  database/     # DuckDB database file (facts.db), Qdrant collections (embedded), ingestion_log.db
+  raw/                        # Copie dei file sorgente
+  parsed/                     # Cache testi estratti: <doc_id>.txt
+  database/
+    facts.db                  # DuckDB: schema principale
+    ingestion_log.db          # DuckDB: ingestion state machine
+    qdrant/                   # Qdrant embedded (path locale di default)
   cache/
+Dataset/
+  domande.csv                 # 100 domande del benchmark
+  domande_con_risposte.csv    # Domande + ground truth (per valutazione offline)
+  knowledge_base/
+    menu/                     # PDF menu ristoranti
+    misc/                     # Distanze.csv + Manuale di Cucina.pdf
+    codice_galattico/         # PDF Codice Galattico
+    blogpost/                 # HTML blog post
+  ground_truth/
+    dish_mapping.json         # {dish_name: dish_id}
+    ground_truth_mapped.csv   # Ground truth in formato Kaggle
 output/
+  submission.csv              # Output finale del sistema
+tests/
+  test_phase0_spike.py        # Smoke test API datapizza-ai
+  test_phase1_infrastructure.py # Test DB + Qdrant init
+  test_phase2_ingestion_smoke.py # Test ingestion pipeline
+  test_phase3_easy_pipeline.py   # Test query Easy end-to-end
 docs/
-  architecture.md
+  ARCHITECTURE.md             # Questo documento
 ```
 
 ---
 
-## 17. Sequenza di implementazione
+## 10. Configurazione
 
-L'implementazione segue un approccio **iterativo e misurabile**, non waterfall. L'obiettivo è avere una pipeline end-to-end funzionante sul sottoinsieme Easy il prima possibile, per poter misurare il Jaccard reale e identificare i problemi prima di affrontare i livelli successivi.
+Tutta la configurazione e centralizzata in `src/app/config.py` e leggibile da variabili d'ambiente:
 
-- **Fase 1 (Bootstrap):** Configurazione percorsi, caricamento `dish_mapping.json`, export submission minimale vuota. Verifica spike sulle API di `datapizza-ai`.
-- **Fase 2 (Ingestion base):** Parsing menu PDF, entity extraction LLM, schema DuckDB, segnale di confidenza + fallback vision. Test di estrazione su campione rappresentativo.
-- **Fase 3 (Pipeline Easy):** Tool SQL deterministici, orchestratore semplificato, submission sulle domande Easy. Misurazione Jaccard. Iterazione su chunking e prompt di extraction.
-- **Fase 4 (Estensione Medium/Hard):** Qdrant indexing, agente Qdrant con micro-loop, distanze, licenze. Estensione orchestratore con budget di handoff.
-- **Fase 5 (Impossible):** Compliance rules da Codice Galattico, parsing blog HTML, logica incrociata. Misurazione Jaccard finale.
-
----
-
-## 18. Rischi principali e mitigazioni
-
-### 18.1 Over-generation
-
-L'inclusione di piatti errati abbatte drasticamente il punteggio Jaccard.
-*Mitigazione:* Validazione obbligatoria tramite `dish_mapping.json`; soglia conservativa sull'agente Qdrant; budget di handoff esplicito nell'orchestratore.
-
-### 18.2 Inconsistenza dello storage (Desync)
-
-Modifiche ai file sorgente rischiano di disallineare DuckDB e Qdrant.
-*Mitigazione:* Protocollo "invalida prima, reinserisci dopo" controllato dall'ingestion log via `doc_id`.
-
-### 18.3 Parsing inadeguato di PDF complessi
-
-Layout con colonne, tabelle, emoji e glossari possono essere mal interpretati da Docling.
-*Mitigazione:* Segnale di confidenza esplicito dal LLM di extraction; fallback vision automatico; verifica empirica su un campione di menu prima dell'implementazione.
-
-### 18.4 Qualità dell'entity extraction
-
-Errori in questo passaggio si propagano su entrambi gli store.
-*Mitigazione:* Test di estrazione per tipo di documento; review manuale su campione rappresentativo; warning loggati per `quantity_grams` anomali.
-
-### 18.5 Normalizzazione delle quantità
-
-Quantità espresse in forme eterogenee ("quanto basta", "tre foglie", "500g") richiedono una normalizzazione robusta.
-*Mitigazione:* LLM istruito a produrre `FLOAT` con punto decimale o `NULL` esplicito; `quantity_raw` sempre preservato; range check post-estrazione con logging dei casi anomali.
-
-### 18.6 Eccessivo numero di handoff su domande semplici
-
-Un orchestratore senza vincoli tende a over-investigare anche domande Easy.
-*Mitigazione:* Budget di handoff auto-stimato e dichiarato nel piano prima dell'inizio del loop.
-
-### 18.7 API instabili di datapizza-ai
-
-Il framework è un requisito inattaccabile ma le sue API potrebbero non corrispondere alla documentazione.
-*Mitigazione:* Spike tecnica obbligatoria nella Fase 1 prima di costruire qualsiasi modulo sopra.
-
-### 18.8 Tuning del chunking
-
-Chunk troppo grandi degradano il retrieval semantico; chunk troppo piccoli spezzano il contesto piatto-ingredienti-tecnica.
-*Mitigazione:* Chunking guidato dalla struttura logica del documento con fallback a 700-1200 caratteri; calibrazione empirica nella Fase 3.
+| Variabile | Default | Descrizione |
+|---|---|---|
+| `OPENAI_API_KEY` | *(obbligatoria)* | Chiave API per LLM e embedder |
+| `OPENAI_BASE_URL` | `None` | Base URL personalizzato (proxy/modelli locali) |
+| `OPENAI_EMBEDDER_API_KEY` | *(obbligatoria)* | Chiave API per l'embedder (puo differire dal LLM) |
+| `OPENAI_EMBEDDER_BASE_URL` | `None` | Base URL personalizzato per l'embedder |
+| `LLM_MODEL` | `gpt-5.4-mini` | Modello LLM per extraction, agenti, orchestratore |
+| `LLM_TEMPERATURE` | `0.0` | Temperatura LLM |
+| `LLM_MAX_TOKENS` | `4096` | Max token risposta |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | Modello embedding OpenAI |
+| `EMBEDDING_DIM` | `1536` | Dimensione vettori embedding |
+| `QDRANT_HOST` | `None` | Host Qdrant remoto (se `None` usa storage locale) |
+| `QDRANT_PORT` | `6333` | Porta Qdrant remoto |
+| `QDRANT_API_KEY` | `None` | API key Qdrant remoto |
+| `QDRANT_LOCATION` | `data/database/qdrant` | Path Qdrant embedded locale |
+| `QDRANT_SEARCH_LIMIT` | `10` | Numero massimo di risultati per ricerca semantica |
+| `QDRANT_SCORE_THRESHOLD` | `0.3` | Soglia minima score config (agent usa 0.4 internamente) |
+| `CHUNK_MAX_CHAR_DEFAULT` | `1000` | Lunghezza massima chunk (default) |
+| `CHUNK_MAX_CHAR_MENU` | `1000` | Lunghezza massima chunk per menu |
+| `CHUNK_MAX_CHAR_MANUAL` | `1200` | Lunghezza massima chunk per manuale |
+| `CHUNK_MAX_CHAR_CODE` | `1200` | Lunghezza massima chunk per codice galattico |
+| `CHUNK_MAX_CHAR_BLOG` | `1000` | Lunghezza massima chunk per blog |
+| `MAX_HANDOFFS_EASY` | `2` | Budget handoff per domande Easy |
+| `MAX_HANDOFFS_MEDIUM` | `3` | Budget handoff per domande Medium |
+| `MAX_HANDOFFS_HARD` | `5` | Budget handoff per domande Hard |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `None` | Endpoint OpenTelemetry (opzionale) |
+| `OTEL_SERVICE_NAME` | `datapizza-ai-mvp` | Nome servizio per tracing |
 
 ---
 
-## 19. Definition of Done
+## 11. Testing
 
-L'MVP si considera completato con successo quando:
-
-- tutte le fonti dati sono correttamente indicizzate e monitorate dall'ingestion log
-- il segnale di confidenza e il fallback vision sono operativi e testati
-- la normalizzazione delle quantità produce `FLOAT` o `NULL` esplicito con `quantity_raw` sempre valorizzato
-- ogni domanda del dataset genera un output stabile e formattato
-- l'orchestratore agentico esplicita il ragionamento e rispetta il budget di handoff dichiarato
-- lo script di valutazione locale restituisce un punteggio Jaccard misurabile e affidabile
-- il ciclo di vita INSERT/UPDATE/DELETE garantisce coerenza tra DuckDB e Qdrant senza record orfani
+| File | Scope |
+|---|---|
+| `tests/test_phase0_spike.py` | Verifica che le API di datapizza-ai siano stabili e accessibili |
+| `tests/test_phase1_infrastructure.py` | Init DuckDB schema, init Qdrant collections, ingestion log |
+| `tests/test_phase2_ingestion_smoke.py` | Ingestion end-to-end su un campione ridotto di documenti |
+| `tests/test_phase3_easy_pipeline.py` | Orchestratore + SQL Agent su domande di categoria Easy |
