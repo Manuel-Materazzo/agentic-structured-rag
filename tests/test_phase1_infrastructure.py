@@ -2,14 +2,18 @@
 test_phase1_infrastructure.py — Phase 1 acceptance tests.
 
 Verifies:
-- facts.db and ingestion_log.db are created without errors
+- facts.db and ingestion_log.db are created without errors via KnowledgeManager
 - All four Qdrant collections exist
 - submission.csv is generated with 100 rows and correct columns
 """
 
 from __future__ import annotations
 
+import math
+
 import pytest
+from pathlib import Path
+from unittest.mock import patch
 
 
 @pytest.fixture(scope="module")
@@ -18,16 +22,34 @@ def tmp_db_dir(tmp_path_factory):
     return tmp_path_factory.mktemp("database")
 
 
+@pytest.fixture
+def patched_config_paths(tmp_db_dir, monkeypatch):
+    """Patch the DB paths to use a clean temporary directory."""
+    from src.app import config
+
+    monkeypatch.setattr(config, "FACTS_DB_PATH", tmp_db_dir / "facts.db")
+    monkeypatch.setattr(config, "INGESTION_LOG_DB_PATH", tmp_db_dir / "ingestion_log.db")
+
+    # Force Qdrant to use in-memory storage to avoid touching the local filesystem
+    monkeypatch.setattr(config, "QDRANT_LOCATION", ":memory:")
+    monkeypatch.setattr(config, "QDRANT_HOST", None)
+    monkeypatch.setattr(config, "QDRANT_PORT", 6333)
+    monkeypatch.setattr(config, "QDRANT_API_KEY", None)
+
+
 class TestDatabaseInit:
-    def test_facts_db_created(self, tmp_db_dir):
-        """facts.db should be created with all required tables."""
+    def test_facts_db_created(self, patched_config_paths, tmp_db_dir):
+        """facts.db should be created with all required tables via KnowledgeManager."""
         import duckdb
-        from src.ingestion.runner import FACTS_SCHEMA_SQL
+        from src.ingestion.knowledge_manager import KnowledgeManager
+
+        with KnowledgeManager.create() as km:
+            pass  # Initialize and close
 
         db_path = tmp_db_dir / "facts.db"
-        con = duckdb.connect(str(db_path))
-        con.execute(FACTS_SCHEMA_SQL)
+        assert db_path.exists()
 
+        con = duckdb.connect(str(db_path))
         tables = {
             row[0]
             for row in con.execute(
@@ -44,15 +66,18 @@ class TestDatabaseInit:
             assert t in tables, f"Missing table: {t}"
         con.close()
 
-    def test_ingestion_log_db_created(self, tmp_db_dir):
-        """ingestion_log.db should be created with ingestion_log table."""
+    def test_ingestion_log_db_created(self, patched_config_paths, tmp_db_dir):
+        """ingestion_log.db should be created with ingestion_log table via KnowledgeManager."""
         import duckdb
-        from src.ingestion.runner import INGESTION_LOG_SCHEMA_SQL
+        from src.ingestion.knowledge_manager import KnowledgeManager
+
+        with KnowledgeManager.create() as km:
+            pass
 
         db_path = tmp_db_dir / "ingestion_log.db"
-        con = duckdb.connect(str(db_path))
-        con.execute(INGESTION_LOG_SCHEMA_SQL)
+        assert db_path.exists()
 
+        con = duckdb.connect(str(db_path))
         tables = {
             row[0]
             for row in con.execute(
@@ -62,64 +87,52 @@ class TestDatabaseInit:
         assert "ingestion_log" in tables
         con.close()
 
-    def test_dish_ingredients_nullable_quantity(self, tmp_db_dir):
+    def test_dish_ingredients_nullable_quantity(self, patched_config_paths, tmp_db_dir):
         """quantity_grams must be FLOAT and nullable (not 0.0 for unquantifiable)."""
-        import duckdb
-        from src.ingestion.runner import FACTS_SCHEMA_SQL
+        from src.ingestion.knowledge_manager import KnowledgeManager
 
-        db_path = tmp_db_dir / "facts_qty.db"
-        con = duckdb.connect(str(db_path))
-        con.execute(FACTS_SCHEMA_SQL)
+        with KnowledgeManager.create() as km:
+            # Insert a test document and related entities
+            km.facts_con.execute(
+                "INSERT INTO documents VALUES ('doc1', 'menu/test.pdf', 'menu', CURRENT_TIMESTAMP)"
+            )
+            km.facts_con.execute(
+                "INSERT INTO restaurants (id, name, doc_id) VALUES (1, 'TestRest', 'doc1')"
+            )
+            km.facts_con.execute(
+                "INSERT INTO dishes (id, name, restaurant_id, doc_id) VALUES (1, 'TestDish', 1, 'doc1')"
+            )
 
-        # Insert a test document first
-        con.execute(
-            "INSERT INTO documents VALUES ('doc1', 'menu/test.pdf', 'menu', CURRENT_TIMESTAMP)"
-        )
-        con.execute(
-            "INSERT INTO restaurants (id, name, doc_id) VALUES (1, 'TestRest', 'doc1')"
-        )
-        con.execute(
-            "INSERT INTO dishes (id, name, restaurant_id, doc_id) VALUES (1, 'TestDish', 1, 'doc1')"
-        )
+            # NULL quantity for "quanto basta"
+            km.facts_con.execute(
+                "INSERT INTO dish_ingredients VALUES (1, 'sale', NULL, 'quanto basta', FALSE)"
+            )
+            # Numeric quantity
+            km.facts_con.execute(
+                "INSERT INTO dish_ingredients VALUES (1, 'farina', 200.0, '200g', FALSE)"
+            )
 
-        # NULL quantity for "quanto basta"
-        con.execute(
-            "INSERT INTO dish_ingredients VALUES (1, 'sale', NULL, 'quanto basta', FALSE)"
-        )
-        # Numeric quantity
-        con.execute(
-            "INSERT INTO dish_ingredients VALUES (1, 'farina', 200.0, '200g', FALSE)"
-        )
-
-        rows = con.execute(
-            "SELECT ingredient, quantity_grams FROM dish_ingredients WHERE dish_id = 1"
-        ).fetchall()
-        by_ingredient = dict(rows)
+            rows = km.facts_con.execute(
+                "SELECT ingredient, quantity_grams FROM dish_ingredients WHERE dish_id = 1"
+            ).fetchall()
+            by_ingredient = dict(rows)
 
         assert by_ingredient["sale"] is None, "quantity_grams should be NULL for 'quanto basta'"
-        assert by_ingredient["farina"] == 200.0
-        con.close()
+        assert math.isclose(float(by_ingredient["farina"]), 200.0, rel_tol=1e-09, abs_tol=1e-09)
 
 
 class TestQdrantCollections:
-    def test_four_collections_exist(self):
-        """After init_qdrant_collections(), all four collections must exist."""
-        from qdrant_client import QdrantClient
-        from qdrant_client.models import Distance, VectorParams
-        from src.app.config import ALL_COLLECTIONS, EMBEDDING_DIM
+    def test_four_collections_exist(self, patched_config_paths):
+        """After KnowledgeManager.create(), all four collections must exist in Qdrant."""
+        from src.app.config import ALL_COLLECTIONS
+        from src.ingestion.knowledge_manager import KnowledgeManager
 
-        client = QdrantClient(location=":memory:")
+        with KnowledgeManager.create() as km:
+            client = km.qdrant_client
+            existing = {c.name for c in client.get_collections().collections}
 
-        # Simulate what init_qdrant_collections does
-        for name in ALL_COLLECTIONS:
-            client.create_collection(
-                collection_name=name,
-                vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
-            )
-
-        existing = {c.name for c in client.get_collections().collections}
-        for col in ALL_COLLECTIONS:
-            assert col in existing, f"Collection missing: {col}"
+            for col in ALL_COLLECTIONS:
+                assert col in existing, f"Collection missing: {col}"
 
 
 class TestSubmission:
@@ -127,7 +140,6 @@ class TestSubmission:
         """export_empty_submission() must produce 100 rows with row_id and result columns."""
         import pandas as pd
         from src.app.submission import export_empty_submission
-        from src.app.config import DOMANDE_CSV_PATH
 
         out_path = tmp_path / "submission.csv"
         real_out_path = export_empty_submission(output_path=out_path)
@@ -160,9 +172,8 @@ class TestSubmission:
     def test_submission_export_with_answers(self, tmp_path):
         """export_submission() must write correct row_id/result pairs."""
         import pandas as pd
-        from src.app.submission import export_submission, load_dish_mapping
+        from src.app.submission import export_submission
 
-        mapping = load_dish_mapping()
         # Fake answers for first 3 questions, TODO: avoid skipping real mapping
         fake_answers = {1: [1, 5], 2: [42], 3: []}
         out_path = tmp_path / "submission_answers.csv"
