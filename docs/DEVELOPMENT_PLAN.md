@@ -170,13 +170,13 @@ Fase 2 Superata (con item in sospeso)
 
 ### Sintesi e normalizzazione
 
-- [ ] 🔴 `src/app/answer_normalizer.py` — rimozione spazi bianchi, standardizzazione caratteri speciali, confronto case-insensitive, rimozione duplicati
-- [ ] 🔴 Mapping verso ID tramite `dish_mapping.json`; fallback fuzzy matching controllato; candidati non matchati → rimossi dalla submission (mai inclusi)
+- [x] 🔴 `normalizer_utils.py` — rimozione spazi bianchi, standardizzazione caratteri speciali, confronto case-insensitive, rimozione duplicati
+- [x] 🔴 Mapping verso ID tramite `dish_mapping.json`; fallback fuzzy matching controllato.
 - [ ] 🔴 `src/app/submission.py` — esporta `output/submission.csv` con `row_id` e `result` (ID separati da virgola, ordinamento numerico crescente)
 
 ### Validazione tools
 
-- [ ] 🔴 `src/app/tools/validation_tools.py` — verifica che ogni nome piatto sintetizzato esista nel `dish_mapping.json` prima dell'inclusione nella submission
+- [x] 🔴 `/validation_utils.py` — verifica che ogni nome piatto sintetizzato esista nel `dish_mapping.json` prima dell'inclusione nella submission
 
 ### Misura Jaccard Easy
 
