@@ -28,7 +28,7 @@ CRITICAL RULES:
 - Use ONLY tables and columns from the provided SCHEMA.
 - Do not interpret or filter the results manually: just return the raw SQL.
 - Take a deep breath and think step by step before responding, but keep the rationale short and commit to a single interpretation. 
-- Do not second-guess yourself mid-rationale. long rationales with multiple hypotheses produce inconsistent queries..
+- Do not second-guess yourself mid-rationale. long rationales with multiple hypotheses produce inconsistent queries.
 - Return a valid JSON object with this exact schema: {"sql": "SELECT ...", "rationale": "brief explanation"}
 - If the request is ambiguous, still produce the best single SQL query you can infer.
 - In DuckDB, escape single quotes by doubling them: 'L''aquila', never with backslash.
@@ -37,12 +37,13 @@ FUZZY MATCHING:
 - Names in the DB may differ slightly from how they appear in the user's request (typos, gender, accents, truncations).
 - NEVER filter with exact equality (=) on free-text fields like technique, ingredient, or dish name.
 - Always use jaro_winkler_similarity(field, 'value') > 0.93 for matching these fields.
+- Always use LOWERCASE('value') for TEXT comparations.
 - Use EXISTS / NOT EXISTS subqueries with jaro_winkler_similarity, never IN / NOT IN with exact strings.
 - Example of correct technique filter:
     EXISTS (
       SELECT 1 FROM dish_techniques dt
       WHERE dt.dish_id = d.id
-      AND jaro_winkler_similarity(dt.technique, 'Fermentazione Quantico Biometrica') > 0.93
+      AND jaro_winkler_similarity(dt.technique, LOWER('Fermentazione Quantico Biometrica')) > 0.93
     )
 
 QUERY STRUCTURE RULES:

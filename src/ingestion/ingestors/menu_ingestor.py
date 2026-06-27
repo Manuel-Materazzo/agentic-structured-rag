@@ -90,17 +90,20 @@ class MenuIngestor(BaseIngestor):
                          facts_con: duckdb.DuckDBPyConnection) -> None:
         """Write extracted menu data to DuckDB tables."""
         rest_data = extraction_result.get("restaurant", {})
-        rest_name = rest_data.get("name") or "Unknown"
+        rest_name = rest_data.get("name").lower() or "unknown"
 
         existing_rest = facts_con.execute(
             "SELECT id FROM restaurants WHERE doc_id = ? AND name = ?",
             [doc_id, rest_name],
         ).fetchone()
 
+        # Insert restaurant
         if existing_rest:
             rest_id = existing_rest[0]
         else:
             rest_id = facts_con.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM restaurants").fetchone()[0]
+            # Lowercase data for normalization
+            lowercase_professiona_orders = [x.lower() for x in rest_data.get("professional_orders", [])]
             facts_con.execute(
                 """
                 INSERT INTO restaurants
@@ -108,13 +111,15 @@ class MenuIngestor(BaseIngestor):
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    rest_id, rest_name, rest_data.get("chef"), rest_data.get("planet"),
-                    rest_data.get("chef_license"), rest_data.get("professional_orders", []), doc_id,
+                    rest_id, rest_name, rest_data.get("chef", "").lower(), rest_data.get("planet", "").lower(),
+                    rest_data.get("chef_license", "").lower(), lowercase_professiona_orders, doc_id,
                 ],
             )
 
+        # Insert dishes
         for dish in extraction_result.get("dishes", []):
-            dish_name = (dish.get("name") or "").strip()
+            # Lowercase for normalization
+            dish_name = (dish.get("name") or "").strip().lower()
             if not dish_name:
                 continue
 
@@ -132,12 +137,15 @@ class MenuIngestor(BaseIngestor):
                     INSERT INTO dishes (id, name, restaurant_id, preparation_notes, doc_id)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    [dish_id, dish_name, rest_id, dish.get("preparation_notes"), doc_id],
+                    [dish_id, dish_name, rest_id, dish.get("preparation_notes", "").lower(), doc_id],
                 )
 
+            # Insert dish ingredients
             for ing in dish.get("ingredients", []):
-                ing_name = (ing.get("name") or "").strip()
-                if not ing_name: continue
+                # Lowercase for normalization
+                ing_name = (ing.get("name") or "").strip().lower()
+                if not ing_name:
+                    continue
 
                 # Force quantity_raw to empty string if None or missing
                 qty_raw = ing.get("quantity_raw")
@@ -152,14 +160,16 @@ class MenuIngestor(BaseIngestor):
                         VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT (dish_id, ingredient) DO NOTHING
                         """,
-                        [dish_id, ing_name, ing.get("quantity_grams"), qty_raw, False],
+                        [dish_id, ing_name, ing.get("quantity_grams"), qty_raw.lower(), False],
                     )
                 except Exception as exc:
                     log.warning("Failed to insert ingredient '%s': %s", ing_name, exc)
 
+            # Insert dish techniques
             for tech in dish.get("techniques", []):
                 tech_name = tech.strip() if isinstance(tech, str) else str(tech)
-                if not tech_name: continue
+                if not tech_name:
+                    continue
                 try:
                     facts_con.execute(
                         """
@@ -167,7 +177,7 @@ class MenuIngestor(BaseIngestor):
                         VALUES (?, ?)
                         ON CONFLICT (dish_id, technique) DO NOTHING
                         """,
-                        [dish_id, tech_name],
+                        [dish_id, tech_name.lower()],
                     )
                 except Exception as exc:
                     log.warning("Failed to insert technique '%s': %s", tech_name, exc)

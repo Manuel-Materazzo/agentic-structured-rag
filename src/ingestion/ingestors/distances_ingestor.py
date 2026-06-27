@@ -98,7 +98,7 @@ class DistancesIngestor(BaseIngestor):
                         VALUES (?, ?, ?)
                         ON CONFLICT(planet_a, planet_b) DO UPDATE SET distance_ly = excluded.distance_ly
                         """,
-                        [planet_a, planet_b, distance],
+                        [planet_a.lower(), planet_b.lower(), distance],
                     )
                     rows_inserted += 1
                 except Exception as exc:

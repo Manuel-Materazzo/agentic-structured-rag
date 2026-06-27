@@ -115,9 +115,10 @@ class CookManualIngestor(BaseIngestor):
         """Write extracted techniques to the technique_taxonomy table."""
         techniques = extraction_result.get("techniques", [])
         for tech in techniques:
-            name = tech.get("name")
-            macro_category = tech.get("macro_category")
-            required_license = tech.get("required_license_level")
+            # Lowercase data for normalization
+            name = tech.get("name").lower()
+            macro_category = tech.get("macro_category").lower()
+            required_license = tech.get("required_license_level").lower()
 
             if not name or not macro_category:
                 log.warning("Skipping incomplete technique: %s", tech)

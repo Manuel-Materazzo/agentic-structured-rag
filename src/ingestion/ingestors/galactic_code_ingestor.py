@@ -134,10 +134,10 @@ class GalacticCodeIngestor(BaseIngestor):
         """Write extracted compliance rules to the DuckDB database."""
         rules = extraction_result.get("compliance_rules", [])
         for rule in rules:
-            rule_type = rule.get("rule_type")
-            subject = rule.get("subject")
-            constraint_value = rule.get("constraint_value")
-            scope = rule.get("scope")
+            rule_type = rule.get("rule_type").lower()
+            subject = rule.get("subject").lower()
+            constraint_value = rule.get("constraint_value").lower()
+            scope = rule.get("scope").lower()
 
             if not rule_type or not subject or not constraint_value:
                 log.warning("Skipping incomplete compliance rule: %s", rule)
@@ -181,3 +181,6 @@ class GalacticCodeIngestor(BaseIngestor):
                     os.remove(tmp_path)
 
         return _index
+
+    def read_db_entries_for_embedding(self, doc_id: str, facts_con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+        return {}
