@@ -83,8 +83,17 @@ class GalacticCodeIngestor(BaseIngestor):
             from datapizza.modules.parsers.docling import DoclingParser
 
             parser = DoclingParser()
-            nodes = parser([source_path])
-            text = "\n\n".join(getattr(n, "text", "") for n in nodes if getattr(n, "text", ""))
+            result = parser(source_path)
+            # Secure the iteration
+            nodes = result if isinstance(result, (list, tuple)) else [result]
+
+            texts = []
+            for n in nodes:
+                text = getattr(n, "text", None) or getattr(n, "content", "")
+                if text:
+                    texts.append(text)
+
+            text = "\n\n".join(texts)
             if text.strip():
                 return normalize_whitespace(text)
         except Exception as exc:
@@ -92,7 +101,8 @@ class GalacticCodeIngestor(BaseIngestor):
 
         return normalize_whitespace(read_text_fallback(Path(source_path)))
 
-    def write_db_entries(self, extraction_result: dict[str, Any], doc_id: str, facts_con: duckdb.DuckDBPyConnection) -> None:
+    def write_db_entries(self, extraction_result: dict[str, Any], doc_id: str,
+                         facts_con: duckdb.DuckDBPyConnection) -> None:
         """Write extracted compliance rules to the DuckDB database."""
         rules = extraction_result.get("compliance_rules", [])
         for rule in rules:
@@ -116,7 +126,8 @@ class GalacticCodeIngestor(BaseIngestor):
             )
         log.info("Wrote %d compliance rules for doc %s", len(rules), doc_id[:8])
 
-    def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path) -> Callable[[str, str, dict], None]:
+    def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path) -> Callable[
+        [str, str, dict], None]:
         """Return a vector_indexer that chunks raw_text and upserts into Qdrant."""
         # Pre-parse the text to bypass DoclingParser inside datapizza pipeline
         raw_text = self._parse_code_text(str(source_path))
@@ -150,4 +161,5 @@ class GalacticCodeIngestor(BaseIngestor):
                     text="",
                 ),
             )
+
         return _index

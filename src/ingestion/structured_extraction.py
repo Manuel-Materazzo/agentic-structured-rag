@@ -96,10 +96,20 @@ def _parse_document(source_path: str, source_type: str) -> str:
     from datapizza.modules.parsers.docling import DoclingParser
     parser = DoclingParser()
     try:
-        nodes = parser([source_path])
-        return "\n\n".join(getattr(n, "text", n.content) for n in nodes if getattr(n, "text", n.content))
+        result = parser(source_path)
+        # If the result is not a list/iterable, convert it to a list
+        nodes = result if isinstance(result, (list, tuple)) else [result]
+
+        texts = []
+        for n in nodes:
+            # Handles both Node objects and generic objects
+            text = getattr(n, "text", None) or getattr(n, "content", "")
+            if text:
+                texts.append(text)
+
+        return "\n\n".join(texts)
     except Exception as exc:
-        log.warning("DoclingParser failed for %s: %s — falling back.", source_path, exc)
+        log.warning("DoclingParser failed for %s: %s - falling back.", source_path, exc)
         return Path(source_path).read_text(encoding="utf-8", errors="ignore")
 
 
@@ -111,6 +121,7 @@ def _get_llm_client(model: str):
 
 def _build_extraction_prompt(raw_text: str, source_type: str) -> str:
     hint = f"This is a {source_type} document. Extract all relevant entities according to the requested schema."
+    # TODO: map reduce for long documents
     if len(raw_text) > _MAX_INPUT_CHARS:
         log.warning("Truncating document text to %d chars", _MAX_INPUT_CHARS)
     return f"{hint}\n\nDOCUMENT TEXT:\n{raw_text[:_MAX_INPUT_CHARS]}"
@@ -119,10 +130,16 @@ def _build_extraction_prompt(raw_text: str, source_type: str) -> str:
 def _parse_json_response(text: str) -> dict[str, Any]:
     #TODO: use json_repair library
     text = text.strip()
+    if not text:
+        return {"parsing_confidence": "low", "parsing_issues": "Empty response from LLM"}
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # If JSON is broken, return low confidence to avoid crashes
+        return {"parsing_confidence": "low", "parsing_issues": "Invalid JSON returned", "raw_text": text}
 
 
 def _postprocess_quantities(result: dict[str, Any]) -> dict[str, Any]:

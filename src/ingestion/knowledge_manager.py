@@ -132,6 +132,7 @@ class KnowledgeManager:
         self.facts_con = facts_con
         self.log_con = log_con
         self.qdrant_client = qdrant_client
+        self._vectorstore = None
 
     # ------------------------------------------------------------------
     # Factory / context manager
@@ -140,10 +141,29 @@ class KnowledgeManager:
     @classmethod
     def create(cls) -> "KnowledgeManager":
         """Initialise all storage backends and return a ready manager."""
-        facts_con = cls._init_facts_db()
-        log_con = cls._init_ingestion_log_db()
-        qdrant_client = cls._init_qdrant_collections()
-        return cls(facts_con, log_con, qdrant_client)
+        km = cls.__new__(cls)
+        km.facts_con = cls._init_facts_db()
+        km.log_con = cls._init_ingestion_log_db()
+        km._vectorstore = None  # Inizializza la cache
+
+        vs = km.get_qdrant_vectorstore()
+        client = vs.get_client()
+
+        # Creazione collections Qdrant
+        from qdrant_client.models import Distance, VectorParams
+        existing_names = {c.name for c in client.get_collections().collections}
+        for name in ALL_COLLECTIONS:
+            if name not in existing_names:
+                client.create_collection(
+                    collection_name=name,
+                    vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
+                )
+                log.info("Created Qdrant collection: %s", name)
+            else:
+                log.info("Qdrant collection already exists: %s", name)
+
+        km.qdrant_client = client
+        return km
 
     def close(self) -> None:
         self.facts_con.close()
@@ -175,51 +195,32 @@ class KnowledgeManager:
         log.info("ingestion_log.db ready at %s", INGESTION_LOG_DB_PATH)
         return con
 
-    @staticmethod
-    def _init_qdrant_collections() -> QdrantClient:
-        from qdrant_client.models import Distance, VectorParams
+    def get_qdrant_vectorstore(self):
+        """Return a cached QdrantVectorstore using the configured connection."""
+        if self._vectorstore is not None:
+            return self._vectorstore
 
-        vs = KnowledgeManager.get_qdrant_vectorstore()
-        client = vs.get_client()
-
-        existing_names = {c.name for c in client.get_collections().collections}
-        for name in ALL_COLLECTIONS:
-            if name not in existing_names:
-                client.create_collection(
-                    collection_name=name,
-                    vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
-                )
-                log.info("Created Qdrant collection: %s", name)
-            else:
-                log.info("Qdrant collection already exists: %s", name)
-
-        return client
-
-    @staticmethod
-    def get_qdrant_vectorstore():
-        """Return a QdrantVectorstore using the configured connection."""
         from datapizza.vectorstores.qdrant import QdrantVectorstore
 
         if QDRANT_HOST:
-            return QdrantVectorstore(host=QDRANT_HOST, port=QDRANT_PORT, api_key=QDRANT_API_KEY)
+            vs = QdrantVectorstore(host=QDRANT_HOST, port=QDRANT_PORT, api_key=QDRANT_API_KEY)
+        else:
+            is_local_path = (
+                    QDRANT_LOCATION
+                    and QDRANT_LOCATION != ":memory:"
+                    and os.path.splitdrive(QDRANT_LOCATION)[0]
+            )
+            if is_local_path:
+                vs = QdrantVectorstore.__new__(QdrantVectorstore)
+                vs.host = None
+                vs.port = 6333
+                vs.api_key = None
+                vs.kwargs = {"path": QDRANT_LOCATION}
+            else:
+                vs = QdrantVectorstore(location=QDRANT_LOCATION)
 
-        # Windows local paths (e.g. C:\...) must be passed as 'path', not 'location',
-        # otherwise QdrantClient mistakes 'c' as a URL scheme.
-        # TODO: open an issue on datapizza-ai to fix the wrapper validation.
-        is_local_path = (
-                QDRANT_LOCATION
-                and QDRANT_LOCATION != ":memory:"
-                and os.path.splitdrive(QDRANT_LOCATION)[0]
-        )
-        if is_local_path:
-            vs = QdrantVectorstore.__new__(QdrantVectorstore)
-            vs.host = None
-            vs.port = 6333
-            vs.api_key = None
-            vs.kwargs = {"path": QDRANT_LOCATION}
-            return vs
-
-        return QdrantVectorstore(location=QDRANT_LOCATION)
+        self._vectorstore = vs
+        return vs
 
     # ------------------------------------------------------------------
     # Ingestion-log operations

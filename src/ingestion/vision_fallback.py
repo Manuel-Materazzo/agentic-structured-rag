@@ -60,7 +60,7 @@ def _parse_with_docling_ocr(source_path: str) -> str:
     ocr_options = OCROptions(engine=OCREngine.EASY_OCR)
     parser = DoclingParser(ocr_options=ocr_options)
 
-    nodes = parser([source_path])
+    nodes = parser(source_path)
     return "\n\n".join(n.text for n in nodes if n.text)
 
 
