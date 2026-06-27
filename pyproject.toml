@@ -16,6 +16,7 @@ dependencies = [
     "fastapi",
     "pandas",
     "uvicorn",
+    "easyocr",
     "datapizza-ai",
     "datapizza-ai-clients-openai-like",
     "datapizza-ai-embedders-openai",
