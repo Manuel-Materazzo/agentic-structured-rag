@@ -1,7 +1,7 @@
 """
 structured_extraction.py — LLM-based entity extraction from parsed documents.
 
-Dynamically selects the appropriate extraction prompt and DuckDB write strategy
+Dynamically selects the appropriate extraction prompt and transformation strategy
 based on source_type ('menu', 'codice', 'manual', 'blog').
 """
 
@@ -10,11 +10,8 @@ from __future__ import annotations
 import json
 import logging
 import math
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Callable
-
-import duckdb
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -89,36 +86,6 @@ def extract_entities(
         result.get("parsing_confidence", "unknown"),
     )
     return result
-
-
-def write_to_duckdb(
-        extraction_result: dict[str, Any],
-        doc_id: str,
-        source_path: str,
-        source_type: str,
-        facts_con: duckdb.DuckDBPyConnection,
-        post_write_callback: Callable[[dict[str, Any], str, duckdb.DuckDBPyConnection], None] | None = None,
-) -> None:
-    """
-    Persist extraction results to facts.db (idempotent).
-    Provides a post_write_callback hook to allow writing to a specific table based on source_type.
-    """
-    now = datetime.now(timezone.utc)
-
-    facts_con.execute(
-        """
-        INSERT INTO documents (doc_id, source_path, source_type, ingested_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT (doc_id) DO NOTHING
-        """,
-        [doc_id, source_path, source_type, now],
-    )
-
-    # Esecuzione del callback passato in input
-    if post_write_callback:
-        post_write_callback(extraction_result, doc_id, facts_con)
-    else:
-        log.warning("No specific DuckDB writer provided for source_type: %s", source_type)
 
 
 # ---------------------------------------------------------------------------
