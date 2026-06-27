@@ -1,4 +1,4 @@
-# Piano di Sviluppo — DataPizza AI MVP
+﻿# Piano di Sviluppo — DataPizza AI MVP
 > Derivato da `ARCHITECTURE_DATAPIZZA_AI_MVP.md`  
 > Ultimo aggiornamento: 19 giugno 2026
 
@@ -153,7 +153,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 ### Tool deterministici SQL
 
 - [ ] 🔴 `src/app/tools/lookup_tools.py` — implementare i tool esposti all'orchestratore
-- [ ] 🔴 Agente SQL (`src/app/agents/sql_agent.py`) — traduce linguaggio naturale in SQL, esegue, ritorna risultato raw con nomi colonne; auto-retry max 2 tentativi su errore sintattico
+- [x] 🔴 Agente SQL (`src/app/agents/sql_agent.py`) — traduce linguaggio naturale in SQL, esegue, ritorna risultato raw con nomi colonne; auto-retry max 2 tentativi su errore sintattico
 
 ### Orchestratore base
 
