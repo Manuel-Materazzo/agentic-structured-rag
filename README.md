@@ -1,160 +1,317 @@
-## Descrizione della sfida 🪐
+# Agentic Structured RAG
 
-_(Disclaimer: questa sezione iniziale è puramente flavour ed era stata usata per la sfida "Hackapizza". Leggere la sezione successiva per avere tutto il necessario per completare il test tecnico)_
+A hybrid agentic RAG system that answers natural-language questions about a fictional intergalactic restaurant universe.
+It combines deterministic SQL lookups against a DuckDB structured store with semantic retrieval via Qdrant, orchestrated
+by an LLM-driven ReAct agent loop.
 
-**Benvenuti** nel **Ciclo Cosmico 789**, dove l'umanità ha superato non solo i confini del proprio sistema solare, ma anche quelli delle dimensioni conosciute. In questo vasto intreccio di realtà e culture, la gastronomia si è evoluta in un'arte che trascende spazio e tempo. 
+Built for the [DataPizza AI Engineer Technical Test](https://github.com/datapizza-labs/datapizza-ai).
 
-![](https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F6840884%2Fd4cd3a9d619dec67942e5344dcacf9e4%2F9gw32h.gif?generation=1737047022355670&alt=media)
+## Design Rationale
+The knowledge base is almost entirely structured, which makes "relationalize-first" the natural ingestion strategy: entity extraction -> DuckDB. 
 
-Ristoranti di ogni tipo arricchiscono il tessuto stesso del multiverso: dai sushi bar di **Pandora** che servono prelibati sashimi di **Magikarp** e ravioli al **Vaporeon**, alle taverne di **Tatooine** dove l’**Erba Pipa** viene utilizzata per insaporire piatti prelibati, fino ai moderni locali dove lo **Slurm** compone salse dai sapori contrastanti - l'universo gastronomico è vasto e pieno di sorprese.
+Most of the example questions contain explicit filters and constraints that map cleanly to SQL, where a pure vector search approach would underperform.
 
-![](https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F6840884%2F888315aac2d2bdd249e8df8fc79f8043%2Fimage.png?generation=1737046855158236&alt=media)
+That said, real users rarely stay within the schema you designed for them. The hybrid approach is the natural evolution i picked for the system: when someone asks "Come funziona la Marinatura Sotto Zero a Polarità Inversa?", SQL has nothing to offer, but the vector store does. 
 
-L'espansione galattica ha portato con sé nuove responsabilità. La **Federazione Galattica** monitora attentamente ogni ingrediente, tecnica di preparazione e certificazione necessaria per garantire che il cibo servito sia sicuro per tutte le specie senzienti. Gli **chef** devono destreggiarsi tra regolamenti complessi, gestire ingredienti esotici che esistono simultaneamente in più stati quantici e rispettare le restrizioni alimentari di centinaia di specie provenienti da ogni angolo del **multiverso**.
+Keeping both tools available makes the system robust to the long tail of unexpected queries, and keeps the road open for a possible future rationalization.
 
-Nel cuore pulsante di questo arcipelago cosmico di sapori, si erge un elemento di proporzioni titaniche, un'entità che trascende la mera materialità culinaria: la **Pizza Cosmica**. Si narra che la sua mozzarella sia stata ricavata dalla **Via Lattea** stessa e che, per cuocerla, sia stato necessario il calore di tre soli. Nessuno conosce le sue origini e culti religiosi hanno fondato la loro fede attorno al suo mistero.
+---
 
-![](https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F6840884%2F0c07b3e6f34ac48b9bb627387ce71531%2FTesto%20del%20paragrafo%20(1).png?generation=1737047186767633&alt=media)
+## How it works
 
-***Che la forza sia con voi.***
+```mermaid
+graph TD
+%% Nodes Definitons
+    KB([Knowledge Base <br> PDF / HTML / CSV])
+    OIP[Offline Ingestion Pipeline <br> parse -> LLM entity extraction -> DuckDB + Qdrant]
 
-## Test Tecnico 
+    subgraph Orchestrator_Agent [Orchestrator: datapizza-ai Agent ReAct loop]
+        O[Orchestrator]
+        SQL["SQL Agent <br> DuckDB <br> (as tool)"]
+        VS["VS Agent <br> Qdrant <br> (as tool)"]
+    end
 
-### Specifiche tecniche 💻
-
-Ti sarà richiesto di creare una repository Github che contenga il codice per risolvere in maniera parziale o totale questo test.
-
-Il sistema GenAI che creerai dovrà essere in grado di rispondere alle domande presenti in questo [csv](./Dataset/domande.csv).
-
-Le domande sono in linguaggio naturale e hanno come risposta univoca una lista di piatti. Ad esempio, la prima domanda "Quali sono i piatti che includono le Chocobo Wings come ingrediente?", ha come risposta "Galassia di Sapori: Il Viaggio Senza Tempo", mentre la domanda 10 "Quali piatti eterei sono preparati usando sia la Cottura Olografica Quantum Fluttuante che la Decostruzione Interdimensionale Lovecraftiana?" ha come risposta i piatti "Risotto dei Multiversi", "La Mucca Che Stordisce l'Universo" e "Sogni di Abisso Cosmico".
-
-Le domande sono ordinate per difficoltà e per tipologia. Per la precisione:
-- le domande di difficoltà **"Easy"** riguardano solo gli Ingredienti e le Tecniche, pertanto bastano solo i [Menu](./Dataset/knowledge_base/menu/) di ciascun ristorante
-- le domande di difficoltà **"Medium"** riguardano anche le Licenze e i Pianeti. Nei [Menu](./Dataset/knowledge_base/menu/) sono descritti il livello di Licenza di ogni Chef e il Pianeta su cui si trova il ristorante. Sebbene non necessario, all'interno del [`Manuale di Cucina.pdf`](./Dataset/knowledge_base/misc/Manuale%20di%20Cucina.pdf) e [`Codice Galattico.pdf`](./Dataset/knowledge_base/codice_galattico/Codice%20Galattico.pdf) vi è una descrizione di come funzionano le licenze.
-- le domande di difficoltà **"Hard"** riguardano le distanze tra pianeti, i tipi di cottura/preparazione e la licenza necessaria per la preparazione (ogni piatto necessita di certe tecniche e ogni tecnica necessita di certe licenze). Nel [`Distanze.csv`](./Dataset/knowledge_base/misc/Distanze.csv) c'è la tabella delle distanze tra pianeti. Il pdf [Manuale di Cucina.pdf](./Dataset/knowledge_base/misc/Manuale%20di%20Cucina.pdf) contiene le ultime due informazioni.
-- le domande di difficoltà **"Impossible"** riguardano piccoli dettagli che si trovano all'interno di [`Codice Galattico.pdf`](./Dataset/knowledge_base/codice_galattico/Codice%20Galattico.pdf) e [`Blog post`](./Dataset/knowledge_base/blogpost/)
-
-> [!WARNING]
-> ⚠️⚠️⚠️**IMPORTANTE**⚠️⚠️⚠️: Se hai poco tempo, puoi tranquillamente fermarti SOLO alle domande di difficoltà "Easy". Decidi tu se vuoi migliorare la tua soluzione esistente o cercare di trovare soluzioni per domande più difficili. Un sistema capace di rispondere alle domande "Easy" è già un buon risultato.
-
-### Descrizione Knowledge Base 📋
-
-Dentro la cartella [knowledge_base](./Dataset/knowledge_base), ci sono tutti i file necessari per l'applicativo GenAI per rispondere alle domande.   
-
-All'interno troverai i seguenti file e cartelle:
-
-- [`Menu (30 ristoranti)`](./Dataset/knowledge_base/menu/)
-    
-    - Documenti in pdf contenenti i menù di 30 ristoranti differenti
-    - I menu descrivono in linguaggio naturale il ristorante, riportando il nome dello Chef, il nome del ristorante, (laddove presente) il pianeta su cui c'è il ristorante e le licenze culinarie che ha lo chef
-    - Ogni menu contiene 10 piatti
-    - Ogni piatto contiene gli ingredienti usati e le tecniche di preparazione
-    - Alcuni menu possiedono anche una descrizione in linguaggio naturale della preparazione
-    - Laddove vi siano certi *ordini professionali*, i menu lo citano
-
-- [`Manuale di Cucina.pdf`](./Dataset/knowledge_base/misc/Manuale%20di%20Cucina.pdf)
-    
-    Manuale di cucina che include:
-    
-    - L’elenco e la descrizione delle certificazione che uno chef può acquisire
-    - L’elenco degli ordini professionali gastronomici a cui uno chef può aderire
-    - L’elenco e la descrizione delle tecniche culinarie di preparazione esistenti
-    - \[Hint\] La maggior parte del documento descrive nel dettaglio le tecniche disponibili. Ci sono circa 10 macrocategorie di tecniche culinarie dove ciascuna di esse comprende circa 5 tecniche. Alcuni utenti potrebbero richiedere piatti con una specifica macrocategoria di tecnica o una specifica tecnica.
-    - \[Hint\] La maggior parte del testo è flavour e non serve per rispondere alle domande.
-    - \[Hint\] Gli ordini professionali sono perlopiù usati da alcuni utenti che esprimono una preferenza verso una specifica tecnica. Questa tecnica in genere è riportata nei menu attraverso l'uso di emoji + glossario.
-
-- [`Distanze.csv`](./Dataset/knowledge_base/misc/Distanze.csv)
-    Un csv che contiene la matrice delle distanze in anni luce tra i pianeti su cui si trovano i diversi ristoranti.    
-    \[Hint\] Alcune domande fanno richiesta di piatti entro una certa distanza. Ogni ristorante (eccetto uno) si trova su un pianeta.
-
-- [`Codice Galattico.pdf`](./Dataset/knowledge_base/codice_galattico/Codice%20Galattico.pdf)
-    
-    Un documento legislativo contenente:
-    
-    - Limiti quantitativi applicati all'utilizzo di alcuni ingredienti nella preparazione dei piatti
-    - \[Hint\] Alcune domande richiedono piatti che rispettino questi limiti. Per rispondere, il sistema deve: (1) identificare se il piatto contiene ingredienti regolamentati, e (2) verificare che le quantità usate non superino i limiti previsti dal Codice Galattico.
-    - Vincoli relativi alle certificazioni che gli chef hanno bisogno di acquisire per poter utilizzare specifiche tecniche di preparazione dei piatti
-    - \[Hint\] Alcuni utenti potrebbero chiedere che lo chef che prepara il piatto abbia le certificazioni a norma per cucinare tale piatto, pertanto è necessario controllare per ogni tecnica se lo chef ha la certificazione al livello corretto
-    - \[Hint\] Le informazioni contenute in questo documento sono le più difficili da estrarre e rielaborare dell'intero test tecnico. Tuttavia, hanno impatto solo sulle ultime 4 domande del [csv](./Dataset/domande.csv).
-
-- [`Blog post`](./Dataset/knowledge_base/blogpost/)
-
-    - Pagine HTML che contengono informazioni supplementari su alcuni ristoranti
-    - \[Hint\] Sono necessari solo per un numero limitato di domande, da usare congiuntamente con il Codice Galattico.pdf
-
-
-### Evaluation
-
-Per supportare lo sviluppo e la verifica del tuo sistema, nella cartella [dataset/ground_truth](./Dataset/ground_truth) troverai i file necessari per l'evaluation.
-
-**Attenzione**: la ground truth non deve essere utilizzata dal sistema GenAI per generare le risposte, ma serve esclusivamente per valutare le performance. Il dataset è suddiviso in *public* e *private* (vedi colonna "Usage" in [`ground_truth_mapped.csv`](./Dataset/ground_truth/ground_truth_mapped.csv)) nel caso tu voglia suddividere test e validation.
-
-L'evaluation misura la correttezza delle risposte confrontando i piatti restituiti dal tuo sistema con quelli attesi.
-La metrica utilizzata è la **Jaccard Similarity**, calcolata per ogni domanda come l'intersezione diviso l'unione degli ID dei piatti.
-Il punteggio finale è la **media** della Jaccard Similarity su tutte le domande, moltiplicata per 100.
-
-#### Formato della Submission
-
-Il tuo sistema dovrà produrre un file CSV contenente le risposte per tutte le domande presenti in [domande.csv](./Dataset/domande.csv).
-Il file deve avere le colonne `row_id` e `result`:
-
-```csv
-row_id,result
-1,"23,122"
-2,"12"
-3,"11,87"
-4,"34,43"
-5,"112"
-6,"56"
-7,"99"
-8,"102,103"
-9,"11"
-10,"11,34"
-...
+    CDN[Candidate dish names]
+    NM[Normalizer + dish_mapping.json]
+    SUB([submission.csv <br> row_id, result])
+%% Connections
+    KB --> OIP
+    OIP --> O
+    O --> SQL
+    SQL --> O
+    O --> VS
+    VS --> O
+    O --> CDN
+    CDN --> NM
+    NM --> SUB
 ```
 
-**Dettagli dei campi:**
-- `row_id`: l'ID progressivo della domanda (corrispondente alla riga nel file [domande.csv](./Dataset/domande.csv)), incrementale a partire da 1.
-- `result`: una stringa contenente gli ID dei piatti identificati, separati da virgola.
-    - **Nota**: il campo non può essere vuoto. Si assume che esista sempre almeno un piatto che soddisfi la query.
-    - **Mapping**: per ottenere gli ID corretti, associa i nomi dei piatti trovati agli ID corrispondenti utilizzando il file [dish_mapping.json](./Dataset/ground_truth/dish_mapping.json).
+The orchestrator exposes exactly two tools, `call_sql_agent` and `call_qdrant_agent`, and drives a bounded ReAct loop to
+gather evidence before producing a final JSON answer `{"candidates": [...]}`.
 
-#### Esempio
+## Benchmarks
+The evaluation was done on the SQL agent alone, as there isn't enough time to pick a model and finetune the orchestrator prompt (e.g: qwen3.5 has the tendency to be over cautious and triple-check things, gemma4 aggressively YOLOs queries without thinking twice).
 
-**Domanda**: "Vorrei assaggiare l'Erba Pipa. In quali piatti la posso trovare?"
+See [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md) for a log of the experiments done during development.
 
-Immaginiamo che il tuo sistema ritorni come risposta:
+**TLDR:** With Gemma4 26B A4B (MoE) running only the SQL agent, Jaccard score is 79.0540 with positive results from all
+question categories. There is still room for both improvement and use of smaller models.
 
-```json
-["Risotto all'Erba Pipa", "Insalata Galattica"]
-```
+---
 
-Se il file `dish_mapping.json` contiene:
-```
-{
-    ...
-    "Risotto all'Erba Pipa": 1,
-    ...
-    "Insalata Galattica": 5,
-    ...
-}
-```
-La risposta attesa nel CSV per questa domanda sarà `"1,5"`.
-Se questa è la domanda `1`, allora:
+## 🐋 Docker Quick start
 
-```csv
-row_id,result
-1,"1,5"
-...
-```
+The entrypoint supports four modes controlled by the `MODE` environment variable:
 
-#### Eseguire l'Evaluation
-
-Una volta generato il file CSV con le tue risposte, puoi calcolare il punteggio eseguendo lo script fornito:
+| MODE            | Description                                                                                               |
+|-----------------|-----------------------------------------------------------------------------------------------------------|
+| `api` (default) | Start the FastAPI server on port 8080                                                                     |
+| `ingestion`     | Run the full ingestion pipeline. You can skip this step if you extract the data.zip folder from releases. |
+| `inference`     | Run inference + generate submission + evaluate Jaccard                                                    |
+| `evaluate`      | Run Jaccard evaluation only on an existing submission                                                     |
 
 ```bash
-python src/evaluation.py --submission path/to/your_submission.csv
+# Build and start
+docker compose up --build
+
+# Run ingestion. You can skip this step if you extract the data.zip folder from releases.
+docker compose run -e MODE=ingestion agentic-structured-rag
+
+# Run the full pipeline (inference + kaggle conversion + jaccard)
+docker compose run -e MODE=inference agentic-structured-rag
+
+# Run only evaluations
+docker compose run -e MODE=inference agentic-structured-rag
+
+# Start API
+docker compose run -e MODE=api agentic-structured-rag
 ```
 
-Lo script mostrerà il **Jaccard similarity score** medio complessivo.
+## 🐍 Manual Quick start
 
+### 1. Clone and install
+
+```bash
+git clone https://github.com/Manuel-Materazzo/agentic-structured-rag.git
+cd agentic-structured-rag
+
+# with uv (recommended)
+uv sync
+
+# or with pip
+pip install -e .
+```
+
+### 2. Configure environment
+
+Create a `.env` file at the project root:
+
+```dotenv
+# LLM (used for entity extraction, SQL generation, orchestration)
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=          # optional: override for local/proxy models
+
+# Embedder (can use the same key or a different one)
+OPENAI_EMBEDDER_API_KEY=sk-...
+OPENAI_EMBEDDER_BASE_URL= # optional: override for local/proxy models
+
+# Model selection (defaults shown)
+LLM_MODEL=gpt-5.4-mini
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIM=1536
+
+# Qdrant, local embedded by default, uncomment for remote
+# QDRANT_HOST=localhost
+# QDRANT_PORT=6333
+# QDRANT_API_KEY=
+```
+
+All other settings have sensible defaults. See [Configuration](#configuration) for the full list.
+
+### 3. Run ingestion
+
+**Note**: You can skip this step if you extract the data.zip folder from releases.
+
+```bash
+python src/ingestion.py
+```
+
+This parses all knowledge-base files, extracts entities via LLM, writes facts to `data/database/facts.db`, and indexes
+chunk embeddings into Qdrant at `data/database/qdrant/`.
+
+Ingestion is **idempotent**: already-processed files are skipped based on their SHA-256 hash.
+
+### 4. Start the API server
+
+```bash
+python src/api.py
+# or
+uvicorn src.api:app --host 0.0.0.0 --port 8080
+```
+
+On startup the server runs a health-check, then initializes the orchestrator and both sub-agents.
+
+---
+
+## Running evaluations
+
+### Batch inference (SQL Agent only)
+
+Runs the SQL Agent against all questions in `Dataset/domande_con_risposte.csv` and saves raw results:
+
+```bash
+python src/evaluation/run_inference.py
+# Output: output/inference_results.csv
+```
+
+### LLM-based qualitative evaluation
+
+Compares predicted answers to ground truth using an LLM judge (PASS / PARTIAL / FAIL / EMPTY / ERROR):
+
+```bash
+python src/evaluation/llm_evaluation.py
+# Input:  output/inference_results.csv
+# Output: output/evaluated_results.csv
+```
+
+### Jaccard score (Kaggle-compatible)
+
+```bash
+python src/evaluation/generate_kaggle_submission_file.py --answers-path output/inference_results.csv
+python src/evaluation/jaccard_evaluation.py --submission output/submission.csv
+# Jaccard similarity score: 0.XXXX
+```
+
+## 🌍 API usage
+
+```bash
+# Ask a question
+curl -X POST "http://localhost:8080/predict?question=Quali+piatti+usano+la+fermentazione+quantica?"
+```
+
+Response:
+
+```json
+{
+  "candidates": [
+    "Nebula di Sapori",
+    "Quasar Fritto"
+  ],
+  "agent_trace": null
+}
+```
+
+---
+
+## Testing
+
+```bash
+pytest tests/
+
+# Run a specific phase
+pytest tests/test_phase0_spike.py      # datapizza-ai API availability
+pytest tests/test_phase1_infrastructure.py  # DB + Qdrant init
+pytest tests/test_phase2_ingestion_smoke.py # Ingestion smoke test
+pytest tests/test_phase3_easy_pipeline.py   # Easy questions end-to-end
+```
+
+---
+
+## Project structure
+
+```text
+src/
+  api.py                       # FastAPI server
+  ingestion.py                 # Ingestion CLI entry point
+  app/
+    config.py                  # Centralized configuration
+    orchestrator.py            # ReAct orchestrator (datapizza Agent)
+    agents/
+      sql_agent.py             # NL -> SQL -> DuckDB
+      vector_store_agent.py    # Plan -> Retrieve -> Synthesize (Qdrant)
+  ingestion/
+    ingestion_manager.py       # Document lifecycle (ingest/update/delete)
+    knowledge_manager.py       # DuckDB + Qdrant low-level CRUD
+    structured_extraction.py   # LLM entity extraction
+    vision_fallback.py         # EasyOCR + GPT-4.1-mini vision fallback
+    ingestors/                 # One ingestor per source type
+      menu_ingestor.py
+      cook_manual_ingestor.py
+      galactic_code_ingestor.py
+      blog_ingestor.py
+      distances_ingestor.py
+  model/
+    menu.py                    # Pydantic models for LLM output
+  evaluation/
+    run_inference.py
+    llm_evaluation.py
+    jaccard_evaluation.py
+    generate_kaggle_submission_file.py
+  metrics/
+    jaccard_similarity.py
+  utils/
+    ingestion_utils.py
+    normalizer_utils.py
+    sql_utils.py
+data/
+  database/
+    facts.db                   # DuckDB: structured facts
+    ingestion_log.db           # DuckDB: ingestion state machine
+    qdrant/                    # Qdrant embedded storage (local default)
+  parsed/                      # Cached parsed text: <sha256>.txt
+Dataset/
+  domande.csv                  # 100 benchmark questions
+  knowledge_base/              # PDF / HTML / CSV source files
+  ground_truth/
+    dish_mapping.json          # {dish_name: dish_id}
+output/
+  submission.csv               # Final Kaggle submission
+docs/
+  ARCHITECTURE.md              # Detailed architecture documentation
+```
+
+---
+
+## Configuration
+
+All settings are read from environment variables (or `.env`). Defaults are shown below.
+
+| Variable                      | Default                  | Description                                   |
+|-------------------------------|--------------------------|-----------------------------------------------|
+| `OPENAI_API_KEY`              | ,                        | LLM API key (required)                        |
+| `OPENAI_BASE_URL`             | `None`                   | Custom base URL for LLM                       |
+| `OPENAI_EMBEDDER_API_KEY`     | ,                        | Embedder API key (required)                   |
+| `OPENAI_EMBEDDER_BASE_URL`    | `None`                   | Custom base URL for embedder                  |
+| `LLM_MODEL`                   | `gpt-5.4-mini`           | Model used everywhere                         |
+| `LLM_TEMPERATURE`             | `0.0`                    | LLM temperature                               |
+| `LLM_MAX_TOKENS`              | `4096`                   | Max tokens per response                       |
+| `EMBEDDING_MODEL`             | `text-embedding-3-small` | OpenAI embedding model                        |
+| `EMBEDDING_DIM`               | `1536`                   | Embedding vector size                         |
+| `QDRANT_HOST`                 | `None`                   | Remote Qdrant host (local path used if unset) |
+| `QDRANT_PORT`                 | `6333`                   | Remote Qdrant port                            |
+| `QDRANT_API_KEY`              | `None`                   | Remote Qdrant API key                         |
+| `QDRANT_LOCATION`             | `data/database/qdrant`   | Local Qdrant path                             |
+| `QDRANT_SEARCH_LIMIT`         | `10`                     | Max results per semantic search               |
+| `QDRANT_SCORE_THRESHOLD`      | `0.3`                    | Min score threshold (config)                  |
+| `CHUNK_MAX_CHAR_MENU`         | `1000`                   | Max chars per menu chunk                      |
+| `CHUNK_MAX_CHAR_MANUAL`       | `1200`                   | Max chars per manual chunk                    |
+| `CHUNK_MAX_CHAR_CODE`         | `1200`                   | Max chars per galactic code chunk             |
+| `CHUNK_MAX_CHAR_BLOG`         | `1000`                   | Max chars per blog chunk                      |
+| `MAX_HANDOFFS_EASY`           | `2`                      | ReAct step budget for Easy questions          |
+| `MAX_HANDOFFS_MEDIUM`         | `3`                      | ReAct step budget for Medium questions        |
+| `MAX_HANDOFFS_HARD`           | `5`                      | ReAct step budget for Hard questions          |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `None`                   | OpenTelemetry endpoint (optional)             |
+| `OTEL_SERVICE_NAME`           | `datapizza-ai-mvp`       | Service name for tracing                      |
+
+---
+
+## Architecture
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a detailed description of:
+
+- DuckDB schema (all tables, columns, and normalization rules)
+- Qdrant payload contract
+- Ingestion pipeline phases and ingestor behavior
+- Orchestrator, SQL Agent, and Vector Store Agent internals
+- Document lifecycle (INSERT / UPDATE / DELETE / health-check)
+- Evaluation scripts and submission format
