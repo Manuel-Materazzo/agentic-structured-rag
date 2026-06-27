@@ -14,8 +14,8 @@ from typing import Any
 
 from ingestion.knowledge_manager import KnowledgeManager
 from ingestion.structured_extraction import parse_json_response
-from src.app.config import LLM_MODEL, LLM_TEMPERATURE, OPENAI_API_KEY, OPENAI_BASE_URL
-from src.utils.sql_utils import get_schema_overview, run_sql
+from app.config import LLM_MODEL, LLM_TEMPERATURE, OPENAI_API_KEY, OPENAI_BASE_URL
+from utils.sql_utils import get_schema_overview, run_sql
 
 log = logging.getLogger(__name__)
 # TODO: specify pydantic model

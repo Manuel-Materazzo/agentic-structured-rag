@@ -9,7 +9,7 @@ import re
 import unicodedata
 from difflib import get_close_matches
 
-from src.evaluation.generate_submission_file import dish_name_to_id, get_dish_mapping
+from evaluation.generate_kaggle_submission_file import dish_name_to_id, get_dish_mapping
 
 
 def normalize_text(text: str) -> str:

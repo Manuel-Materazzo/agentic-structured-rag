@@ -74,7 +74,7 @@ def _parse_with_llm_vision(source_path: str) -> str:
 
     import pypdfium2 as pdfium
     from openai import OpenAI
-    from src.app.config import OPENAI_BASE_URL, OPENAI_API_KEY
+    from app.config import OPENAI_BASE_URL, OPENAI_API_KEY
 
     client = OpenAI(
         api_key=OPENAI_API_KEY,

@@ -12,11 +12,11 @@ import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Callable
-from src.app.config import PARSED_DIR
+from app.config import PARSED_DIR
 
 import duckdb
 
-from src.ingestion.ingestion_manager import IngestionManager
+from ingestion.ingestion_manager import IngestionManager
 
 log = logging.getLogger(__name__)
 
@@ -213,7 +213,7 @@ class BaseIngestor(ABC):
             ingestion_manager: IngestionManager,
     ) -> list[tuple[str, str, Path, dict]]:
         """Phase 2 – LLM entity extraction; return 4-tuples with the extraction result appended."""
-        from src.ingestion.structured_extraction import extract_entities
+        from ingestion.structured_extraction import extract_entities
 
         log.info("Phase 2: LLM entity extraction and relations")
         extracted_docs: list[tuple[str, str, Path, dict]] = []
@@ -341,7 +341,7 @@ class BaseIngestor(ABC):
             extraction_result: dict,
     ) -> dict:
         """Re-run extraction via OCR when the LLM returned low confidence."""
-        from src.ingestion.vision_fallback import parse_with_vision
+        from ingestion.vision_fallback import parse_with_vision
 
         try:
             raw_text_vision = parse_with_vision(source_path)
@@ -356,7 +356,7 @@ class BaseIngestor(ABC):
             )
             return extraction_result
 
-        from src.ingestion.structured_extraction import extract_entities
+        from ingestion.structured_extraction import extract_entities
 
         return extract_entities(
             source_path=source_path,

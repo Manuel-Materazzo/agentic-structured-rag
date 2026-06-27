@@ -23,7 +23,7 @@ def tmp_db_dir(tmp_path_factory):
 @pytest.fixture
 def patched_config_paths(tmp_db_dir, monkeypatch):
     """Patch the DB paths to use a clean temporary directory."""
-    from src.app import config
+    from app import config
 
     monkeypatch.setattr(config, "FACTS_DB_PATH", tmp_db_dir / "facts.db")
     monkeypatch.setattr(config, "INGESTION_LOG_DB_PATH", tmp_db_dir / "ingestion_log.db")
@@ -39,7 +39,7 @@ class TestDatabaseInit:
     def test_facts_db_created(self, patched_config_paths, tmp_db_dir):
         """facts.db should be created with all required tables via KnowledgeManager."""
         import duckdb
-        from src.ingestion.knowledge_manager import KnowledgeManager
+        from ingestion.knowledge_manager import KnowledgeManager
 
         with KnowledgeManager.create() as km:
             pass  # Initialize and close
@@ -67,7 +67,7 @@ class TestDatabaseInit:
     def test_ingestion_log_db_created(self, patched_config_paths, tmp_db_dir):
         """ingestion_log.db should be created with ingestion_log table via KnowledgeManager."""
         import duckdb
-        from src.ingestion.knowledge_manager import KnowledgeManager
+        from ingestion.knowledge_manager import KnowledgeManager
 
         with KnowledgeManager.create() as km:
             pass
@@ -87,7 +87,7 @@ class TestDatabaseInit:
 
     def test_dish_ingredients_nullable_quantity(self, patched_config_paths, tmp_db_dir):
         """quantity_grams must be FLOAT and nullable (not 0.0 for unquantifiable)."""
-        from src.ingestion.knowledge_manager import KnowledgeManager
+        from ingestion.knowledge_manager import KnowledgeManager
 
         with KnowledgeManager.create() as km:
             # Insert a test document and related entities
@@ -122,8 +122,8 @@ class TestDatabaseInit:
 class TestQdrantCollections:
     def test_four_collections_exist(self, patched_config_paths):
         """After KnowledgeManager.create(), all four collections must exist in Qdrant."""
-        from src.app.config import ALL_COLLECTIONS
-        from src.ingestion.knowledge_manager import KnowledgeManager
+        from app.config import ALL_COLLECTIONS
+        from ingestion.knowledge_manager import KnowledgeManager
 
         with KnowledgeManager.create() as km:
             client = km.qdrant_client
@@ -137,7 +137,7 @@ class TestSubmission:
     def test_empty_submission_100_rows(self, tmp_path):
         """export_empty_submission() must produce 100 rows with row_id and result columns."""
         import pandas as pd
-        from src.evaluation.generate_submission_file import export_empty_submission
+        from evaluation.generate_kaggle_submission_file import export_empty_submission
 
         out_path = tmp_path / "submission.csv"
         real_out_path = export_empty_submission(output_path=out_path)
@@ -151,7 +151,7 @@ class TestSubmission:
 
     def test_dish_mapping_loads(self):
         """load_dish_mapping() must return a non-empty dict."""
-        from src.evaluation.generate_submission_file import load_dish_mapping
+        from evaluation.generate_kaggle_submission_file import load_dish_mapping
         mapping = load_dish_mapping()
         assert len(mapping) > 0
         # All values should be integers
@@ -160,7 +160,7 @@ class TestSubmission:
 
     def test_dish_name_to_id_exact(self):
         """dish_name_to_id() must map a known dish name to its integer ID."""
-        from src.evaluation.generate_submission_file import load_dish_mapping, dish_name_to_id
+        from evaluation.generate_kaggle_submission_file import load_dish_mapping, dish_name_to_id
         mapping = load_dish_mapping()
         # Pick the first entry and verify round-trip
         first_name = next(iter(mapping))
@@ -170,7 +170,7 @@ class TestSubmission:
     def test_submission_export_with_answers(self, tmp_path):
         """export_submission() must write correct row_id/result pairs."""
         import pandas as pd
-        from src.evaluation.generate_submission_file import export_submission
+        from evaluation.generate_kaggle_submission_file import export_submission
 
         # Fake answers for first 3 questions, TODO: avoid skipping real mapping
         fake_answers = {1: [1, 5], 2: [42], 3: []}

@@ -13,8 +13,8 @@ import duckdb
 import pandas as pd
 
 from ingestion.ingestors.base_ingestor import BaseIngestor
-from src.app.config import KB_DIR
-from src.ingestion.ingestion_manager import IngestionManager
+from app.config import KB_DIR
+from ingestion.ingestion_manager import IngestionManager
 
 log = logging.getLogger(__name__)
 

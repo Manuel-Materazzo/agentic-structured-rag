@@ -17,8 +17,8 @@ from typing import Optional, Callable, Any
 
 import duckdb
 
-from src.app.config import PARSED_DIR
-from src.ingestion.knowledge_manager import KnowledgeManager
+from app.config import PARSED_DIR
+from ingestion.knowledge_manager import KnowledgeManager
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class IngestionManager:
         try:
             # 1. Parsing + LLM entity extraction
             self.km.log_set_status(doc_id, "parsing")
-            from src.ingestion.structured_extraction import extract_entities
+            from ingestion.structured_extraction import extract_entities
             extraction_result = extract_entities(
                 source_path=source_path,
                 system_prompt=system_prompt,
@@ -97,7 +97,7 @@ class IngestionManager:
 
             if use_vision_fallback and extraction_result.get("parsing_confidence") == "low":
                 log.warning("Low confidence for %s, switching to vision fallback", source_path)
-                from src.ingestion.vision_fallback import parse_with_vision
+                from ingestion.vision_fallback import parse_with_vision
                 raw_text = parse_with_vision(source_path)
                 extraction_result = extract_entities(
                     source_path=source_path,

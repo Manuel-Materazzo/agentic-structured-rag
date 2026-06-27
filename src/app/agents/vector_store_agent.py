@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from ingestion.structured_extraction import parse_json_response
-from src.app.config import (
+from app.config import (
     ALL_COLLECTIONS,
     LLM_MODEL,
     LLM_TEMPERATURE,
@@ -21,7 +21,7 @@ from src.app.config import (
     OPENAI_BASE_URL,
     EMBEDDING_MODEL,
 )
-from src.ingestion.knowledge_manager import KnowledgeManager
+from ingestion.knowledge_manager import KnowledgeManager
 
 log = logging.getLogger(__name__)
 

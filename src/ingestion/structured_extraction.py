@@ -53,7 +53,7 @@ def extract_entities(
         Extraction result dict with dishes, restaurant, parsing_confidence,
         and parsing_issues.
     """
-    from src.app.config import LLM_MODEL
+    from app.config import LLM_MODEL
 
     if raw_text is None:
         raw_text = _parse_document(source_path, source_type)
@@ -136,7 +136,7 @@ def _parse_document(source_path: str, source_type: str) -> str:
 
 def _get_llm_client(model: str):
     from datapizza.clients.openai_like import OpenAILikeClient
-    from src.app.config import OPENAI_API_KEY, OPENAI_BASE_URL
+    from app.config import OPENAI_API_KEY, OPENAI_BASE_URL
     return OpenAILikeClient(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL, model=model)
 
 

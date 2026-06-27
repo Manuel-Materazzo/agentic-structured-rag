@@ -38,7 +38,7 @@ class TestPhase3:
 
     def _seed_facts_db(self, con: duckdb.DuckDBPyConnection) -> None:
         """Initializes the schema and inserts test data into the in-memory DB."""
-        from src.ingestion.knowledge_manager import _FACTS_SCHEMA_SQL
+        from ingestion.knowledge_manager import _FACTS_SCHEMA_SQL
 
         con.execute(_FACTS_SCHEMA_SQL)
         con.execute(
@@ -53,7 +53,7 @@ class TestPhase3:
     @pytest.fixture
     def mock_config_paths(self, tmp_path_factory, monkeypatch):
         """Patch DB and Qdrant paths to use a temporary directory."""
-        from src.app import config
+        from app import config
         db_dir = tmp_path_factory.mktemp("phase3_db")
 
         monkeypatch.setattr(config, "FACTS_DB_PATH", db_dir / "facts.db")
@@ -70,7 +70,7 @@ class TestPhase3:
 
     def test_sql_agent_executes_ingredient_lookup(self, mock_config_paths):
         """Test that the SQLAgent generates the query, executes it, and returns the raw data."""
-        from src.app.agents.sql_agent import SQLAgent
+        from app.agents.sql_agent import SQLAgent
 
         with KnowledgeManager.create() as km:
             self._seed_facts_db(km.facts_con)
@@ -89,12 +89,12 @@ class TestPhase3:
 
     def test_answer_normalizer_and_validation(self, monkeypatch, mock_config_paths):
         """Test that normalization cleans up the text and that mapping excludes unknown plates."""
-        from src.evaluation import generate_submission_file
+        from evaluation import generate_kaggle_submission_file
 
         # Mock the submission mapping so it doesn't depend on the real JSON file
-        monkeypatch.setattr(generate_submission_file, "_DISH_MAPPING", {"Stellar Lasagna": 11, "Galaxy Risotto": 22},
+        monkeypatch.setattr(generate_kaggle_submission_file, "_DISH_MAPPING", {"Stellar Lasagna": 11, "Galaxy Risotto": 22},
                             raising=False)
-        monkeypatch.setattr(generate_submission_file, "_DISH_MAPPING_LOWER",
+        monkeypatch.setattr(generate_kaggle_submission_file, "_DISH_MAPPING_LOWER",
                             {"stellar lasagna": 11, "galaxy risotto": 22},
                             raising=False)
 
@@ -109,16 +109,16 @@ class TestPhase3:
         ids = map_dish_names_to_ids(["stellar lasagna", "unknown dish"])
         assert ids == [11]
 
-    @patch('src.app.orchestrator.Agent')
+    @patch('app.orchestrator.Agent')
     def test_orchestrator_returns_submission_ready_ids(self, MockAgent, monkeypatch, mock_config_paths):
         """Test that the Orchestrator calls the SQL tool and returns the normalized IDs."""
-        from src.app.agents.sql_agent import SQLAgent
-        from src.app.orchestrator import Orchestrator
-        from src.evaluation import generate_submission_file
+        from app.agents.sql_agent import SQLAgent
+        from app.orchestrator import Orchestrator
+        from evaluation import generate_kaggle_submission_file
 
         # Mock mappings
-        monkeypatch.setattr(generate_submission_file, "_DISH_MAPPING", {"Stellar Lasagna": 11}, raising=False)
-        monkeypatch.setattr(generate_submission_file, "_DISH_MAPPING_LOWER", {"stellar lasagna": 11}, raising=False)
+        monkeypatch.setattr(generate_kaggle_submission_file, "_DISH_MAPPING", {"Stellar Lasagna": 11}, raising=False)
+        monkeypatch.setattr(generate_kaggle_submission_file, "_DISH_MAPPING_LOWER", {"stellar lasagna": 11}, raising=False)
 
         with KnowledgeManager.create() as km:
             self._seed_facts_db(km.facts_con)

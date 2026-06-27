@@ -16,8 +16,8 @@ from datapizza.clients.openai_like import OpenAILikeClient
 from datapizza.tools import Tool
 
 from ingestion.structured_extraction import parse_json_response
-from src.app.agents.sql_agent import SQLAgent
-from src.app.config import LLM_MODEL, LLM_TEMPERATURE, OPENAI_API_KEY, OPENAI_BASE_URL
+from app.agents.sql_agent import SQLAgent
+from app.config import LLM_MODEL, LLM_TEMPERATURE, OPENAI_API_KEY, OPENAI_BASE_URL
 
 log = logging.getLogger(__name__)
 

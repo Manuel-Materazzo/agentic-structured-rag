@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 from ingestion.structured_extraction import parse_json_response
-from src.app.config import LLM_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL
+from app.config import LLM_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL
 
 log = logging.getLogger(__name__)
 

@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.app.config import (
+from app.config import (
     DISH_MAPPING_PATH,
     DOMANDE_CSV_PATH,
     SUBMISSION_CSV_PATH,
 )
-from src.utils.argparser_utils import get_submission_parser
+from utils.argparser_utils import get_submission_parser
 
 log = logging.getLogger(__name__)
 

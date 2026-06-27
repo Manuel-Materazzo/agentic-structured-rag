@@ -6,9 +6,9 @@ import csv
 import logging
 from pathlib import Path
 
-from evaluation.generate_submission_file import get_dish_mapping
-from src.ingestion.knowledge_manager import KnowledgeManager
-from src.app.agents.sql_agent import SQLAgent
+from evaluation.generate_kaggle_submission_file import get_dish_mapping
+from ingestion.knowledge_manager import KnowledgeManager
+from app.agents.sql_agent import SQLAgent
 from utils.normalizer_utils import extract_dishes_from_rows
 
 log = logging.getLogger(__name__)

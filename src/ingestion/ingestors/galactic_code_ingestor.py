@@ -14,10 +14,10 @@ from typing import Any, Callable
 import duckdb
 
 from ingestion.ingestors.base_ingestor import BaseIngestor
-from src.app.config import CHUNK_MAX_CHAR_CODE, COLLECTION_CODE, KB_DIR, OPENAI_EMBEDDER_API_KEY, \
+from app.config import CHUNK_MAX_CHAR_CODE, COLLECTION_CODE, KB_DIR, OPENAI_EMBEDDER_API_KEY, \
     OPENAI_EMBEDDER_BASE_URL
-from src.ingestion.ingestion_manager import IngestionManager
-from src.utils.ingestion_utils import build_payload, normalize_whitespace, read_text_fallback
+from ingestion.ingestion_manager import IngestionManager
+from utils.ingestion_utils import build_payload, normalize_whitespace, read_text_fallback
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ def _build_datapizza_pipeline(vs, collection_name: str, chunk_max_char: int):
     from datapizza.modules.parsers.docling import DoclingParser
     from datapizza.modules.splitters import NodeSplitter
     from datapizza.pipeline import IngestionPipeline as DatapizzaPipeline
-    from src.app.config import EMBEDDING_MODEL
+    from app.config import EMBEDDING_MODEL
 
     embedder_client = OpenAIEmbedder(
         api_key=OPENAI_EMBEDDER_API_KEY,

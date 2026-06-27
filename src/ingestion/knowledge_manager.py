@@ -18,7 +18,7 @@ from typing import Optional, Callable, Any
 import duckdb
 from qdrant_client import QdrantClient
 
-from src.app.config import (
+from app.config import (
     ALL_COLLECTIONS,
     EMBEDDING_DIM,
     FACTS_DB_PATH,
@@ -28,7 +28,7 @@ from src.app.config import (
     QDRANT_LOCATION,
     QDRANT_PORT,
 )
-from src.utils.ingestion_utils import delete_qdrant_points_by_doc_id
+from utils.ingestion_utils import delete_qdrant_points_by_doc_id
 
 log = logging.getLogger(__name__)
 

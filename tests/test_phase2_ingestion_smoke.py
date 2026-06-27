@@ -54,7 +54,7 @@ def mock_llm_extraction():
 @pytest.fixture
 def mock_config_paths(tmp_path_factory, monkeypatch):
     """Patch DB and Qdrant paths to use a temporary directory."""
-    from src.app import config
+    from app import config
     db_dir = tmp_path_factory.mktemp("phase2_db")
 
     monkeypatch.setattr(config, "FACTS_DB_PATH", db_dir / "facts.db")
@@ -71,9 +71,9 @@ def mock_config_paths(tmp_path_factory, monkeypatch):
 class TestIngestionConstraints:
     def test_no_zero_quantity_grams(self, mock_config_paths, mock_llm_extraction):
         """Verify that quantity_grams is not 0.0 for unquantifiable cases."""
-        from src.ingestion.knowledge_manager import KnowledgeManager
-        from src.ingestion.ingestors.menu_ingestor import MenuIngestor
-        from src.ingestion.structured_extraction import _postprocess_quantities
+        from ingestion.knowledge_manager import KnowledgeManager
+        from ingestion.ingestors.menu_ingestor import MenuIngestor
+        from ingestion.structured_extraction import _postprocess_quantities
 
         # Apply extraction normalization (should convert 0.0 to None)
         normalized_result = _postprocess_quantities(mock_llm_extraction)
@@ -108,7 +108,7 @@ class TestIngestionConstraints:
 class TestQdrantPayloadContract:
     def test_qdrant_payload_conforms(self, mock_config_paths, mock_llm_extraction):
         """Verify that Qdrant points have payloads containing doc_id, source_type, etc."""
-        from src.ingestion.knowledge_manager import KnowledgeManager
+        from ingestion.knowledge_manager import KnowledgeManager
         from qdrant_client.models import PointStruct
 
         with KnowledgeManager.create() as km:
@@ -144,8 +144,8 @@ class TestQdrantPayloadContract:
 class TestSampleDishesExtraction:
     def test_extract_5_dishes_and_verify_db(self, mock_config_paths):
         """Verify that the extraction of 5 sample dishes completes correctly in DuckDB."""
-        from src.ingestion.knowledge_manager import KnowledgeManager
-        from src.ingestion.ingestors.menu_ingestor import MenuIngestor
+        from ingestion.knowledge_manager import KnowledgeManager
+        from ingestion.ingestors.menu_ingestor import MenuIngestor
 
         # Create a mock with 5 dishes
         mock_5_dishes = {
@@ -179,8 +179,8 @@ class TestSampleDishesExtraction:
 
 class TestVisionFallback:
     @patch('ingestion.ingestors.base_ingestor.BaseIngestor.parse_document')
-    @patch('src.ingestion.structured_extraction.extract_entities')
-    @patch('src.ingestion.vision_fallback.parse_with_vision')
+    @patch('ingestion.structured_extraction.extract_entities')
+    @patch('ingestion.vision_fallback.parse_with_vision')
     def test_vision_fallback_activates_on_low_confidence(
             self,
             mock_vision_parser,  # Corrisponde a parse_with_vision
@@ -190,8 +190,8 @@ class TestVisionFallback:
             tmp_path
     ):
         """Verify that vision fallback activates when parsing_confidence is 'low'."""
-        from src.ingestion.ingestors.menu_ingestor import MenuIngestor
-        from src.ingestion.ingestion_manager import IngestionManager
+        from ingestion.ingestors.menu_ingestor import MenuIngestor
+        from ingestion.ingestion_manager import IngestionManager
 
         # Simulate poorly parsed text from PDF
         mock_parse_document.return_value = "Degraded and incomprehensible menu text."
