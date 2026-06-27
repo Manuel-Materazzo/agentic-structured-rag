@@ -45,6 +45,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 - Tutte le API elencate sopra sono verificate funzionanti nella versione corrente del repository
 - Esiste un file `docs/spike_notes.md` che certifica il risultato della spike
 
+✅ Fase 0 Superata
 ---
 
 ## Fase 1 — Bootstrap e infrastruttura dati
@@ -81,6 +82,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 - Le quattro collection Qdrant esistono (verificabili via UI o API)
 - `submission.csv` viene generato con 100 righe e le colonne `row_id`, `result`
 
+✅ Fase 1 Superata
 ---
 
 ## Fase 2 — Pipeline di ingestion
