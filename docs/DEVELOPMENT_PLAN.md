@@ -192,6 +192,8 @@ Fase 2 Superata (con item in sospeso)
 - Il punteggio Jaccard sulle domande Easy è misurabile e documentato
 - Nessun candidato inventato (non presente in `dish_mapping.json`) compare nella submission
 
+Fase 3 Superata (Jaccard similarity rimandata alla fase 4)
+
 ---
 
 ## Fase 4 — Estensione Medium e Hard
@@ -213,6 +215,7 @@ Fase 2 Superata (con item in sospeso)
 ### Logica Medium (§12.2)
 
 - [ ] 🔴 Incrocio `dishes` + `restaurants` su colonne `planet` e `chef_license` via SQL
+- [ ] 🔴 Rivalutazione schema DB in base alle nuove evidenze di esecuzione
 - [ ] 🔴 Test su campione di 5 domande Medium; registrare Jaccard parziale
 
 ### Logica Hard (§12.3)
