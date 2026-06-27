@@ -16,7 +16,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, Any
 
 import duckdb
 from qdrant_client import QdrantClient
@@ -148,7 +148,7 @@ def _sha256_bytes(data: bytes) -> str:
 # IngestionPipeline
 # ---------------------------------------------------------------------------
 
-class IngestionPipeline:
+class IngestionManager:
     """
     Manages the full document ingestion lifecycle across DuckDB and Qdrant.
 
@@ -167,10 +167,10 @@ class IngestionPipeline:
     """
 
     def __init__(
-        self,
-        facts_con: duckdb.DuckDBPyConnection,
-        log_con: duckdb.DuckDBPyConnection,
-        qdrant_client: QdrantClient,
+            self,
+            facts_con: duckdb.DuckDBPyConnection,
+            log_con: duckdb.DuckDBPyConnection,
+            qdrant_client: QdrantClient,
     ) -> None:
         self.facts_con = facts_con
         self.log_con = log_con
@@ -181,7 +181,7 @@ class IngestionPipeline:
     # ------------------------------------------------------------------
 
     @classmethod
-    def create(cls) -> "IngestionPipeline":
+    def create(cls) -> "IngestionManager":
         """Initialise all storage backends and return a ready pipeline."""
         facts_con = cls._init_facts_db()
         log_con = cls._init_ingestion_log_db()
@@ -195,7 +195,7 @@ class IngestionPipeline:
         if hasattr(self.qdrant_client, "close"):
             self.qdrant_client.close()
 
-    def __enter__(self) -> "IngestionPipeline":
+    def __enter__(self) -> "IngestionManager":
         return self
 
     def __exit__(self, *_) -> None:
@@ -223,7 +223,7 @@ class IngestionPipeline:
     def _init_qdrant_collections() -> QdrantClient:
         from qdrant_client.models import Distance, VectorParams
 
-        vs = IngestionPipeline._get_qdrant_vectorstore()
+        vs = IngestionManager.get_qdrant_vectorstore()
         client = vs.get_client()
 
         existing_names = {c.name for c in client.get_collections().collections}
@@ -240,7 +240,7 @@ class IngestionPipeline:
         return client
 
     @staticmethod
-    def _get_qdrant_vectorstore():
+    def get_qdrant_vectorstore():
         """Return a QdrantVectorstore using the configured connection."""
         from datapizza.vectorstores.qdrant import QdrantVectorstore
 
@@ -251,9 +251,9 @@ class IngestionPipeline:
         # otherwise QdrantClient mistakes 'c' as a URL scheme.
         # TODO: open an issue on datapizza-ai to fix the wrapper validation.
         is_local_path = (
-            QDRANT_LOCATION
-            and QDRANT_LOCATION != ":memory:"
-            and os.path.splitdrive(QDRANT_LOCATION)[0]
+                QDRANT_LOCATION
+                and QDRANT_LOCATION != ":memory:"
+                and os.path.splitdrive(QDRANT_LOCATION)[0]
         )
         if is_local_path:
             vs = QdrantVectorstore.__new__(QdrantVectorstore)
@@ -270,11 +270,11 @@ class IngestionPipeline:
     # ------------------------------------------------------------------
 
     def _log_upsert(
-        self,
-        doc_id: str,
-        source_path: str,
-        status: str,
-        error_message: Optional[str] = None,
+            self,
+            doc_id: str,
+            source_path: str,
+            status: str,
+            error_message: Optional[str] = None,
     ) -> None:
         now = datetime.now(timezone.utc)
         self.log_con.execute(
@@ -291,10 +291,10 @@ class IngestionPipeline:
         )
 
     def _log_set_status(
-        self,
-        doc_id: str,
-        status: str,
-        error_message: Optional[str] = None,
+            self,
+            doc_id: str,
+            status: str,
+            error_message: Optional[str] = None,
     ) -> None:
         now = datetime.now(timezone.utc)
         self.log_con.execute(
@@ -339,12 +339,14 @@ class IngestionPipeline:
     # ------------------------------------------------------------------
 
     def ingest_document(
-        self,
-        source_path: str,
-        source_type: str = "menu",
-        use_vision_fallback: bool = True,
-        skip_embedding: bool = False,
-        vector_indexer=None,
+            self,
+            source_path: str,
+            system_prompt: str,
+            post_write_callback: Callable[[dict[str, Any], str, duckdb.DuckDBPyConnection], None] | None = None,
+            source_type: str = "menu",
+            use_vision_fallback: bool = True,
+            skip_embedding: bool = False,
+            vector_indexer=None,
     ) -> str:
         """
         Full ingestion lifecycle for a single document.
@@ -354,6 +356,8 @@ class IngestionPipeline:
         On exception: → failed
 
         Args:
+            post_write_callback: Hook to allow writing to a specific table based on source_type.
+            system_prompt: System prompt to ba used during document extraction.
             source_path: Path to the source file.
             source_type: One of "menu", "manual", "code", "blog".
             use_vision_fallback: Re-extract via OCR when parsing confidence is low.
@@ -381,6 +385,7 @@ class IngestionPipeline:
             from src.ingestion.structured_extraction import extract_entities
             extraction_result = extract_entities(
                 source_path=source_path,
+                system_prompt=system_prompt,
                 source_type=source_type,
                 doc_id=doc_id,
             )
@@ -391,6 +396,7 @@ class IngestionPipeline:
                 raw_text = parse_with_vision(source_path)
                 extraction_result = extract_entities(
                     source_path=source_path,
+                    system_prompt=system_prompt,
                     source_type=source_type,
                     doc_id=doc_id,
                     raw_text=raw_text,
@@ -406,7 +412,7 @@ class IngestionPipeline:
             # 2. Structured store (DuckDB)
             self._log_set_status(doc_id, "extracting")
             from src.ingestion.structured_extraction import write_to_duckdb
-            write_to_duckdb(extraction_result, doc_id, source_path, source_type, self.facts_con)
+            write_to_duckdb(extraction_result, doc_id, source_path, source_type, self.facts_con, post_write_callback)
             self._log_set_status(doc_id, "extracted")
 
             # 3. Vector index
@@ -423,34 +429,6 @@ class IngestionPipeline:
             self._log_set_status(doc_id, "failed", error_message=str(exc))
             log.error("Ingestion failed for %s: %s", source_path, exc, exc_info=True)
             raise
-
-    def index_document(
-        self,
-        doc_id: str,
-        source_path: str,
-        extraction_result: dict,
-        *,
-        collection_name: str,
-        metadata: dict,
-    ) -> None:
-        """
-        Chunk, embed, and upsert a document into a Qdrant collection.
-
-        This is the canonical vector-indexing step. Pass it as a
-        ``vector_indexer`` partial to ``ingest_document`` when you need
-        both structured and vector ingestion in one call.
-
-        Args:
-            doc_id: SHA-256 of the source file (from ingest_document).
-            source_path: Path to the source file.
-            extraction_result: Output of ``extract_entities`` (used to build metadata).
-            collection_name: Target Qdrant collection.
-            metadata: Base payload merged into every chunk's Qdrant point.
-        """
-        raise NotImplementedError(
-            "index_document must be implemented by a source-type-specific subclass "
-            "or replaced with a vector_indexer callable passed to ingest_document()."
-        )
 
     def update_document(self, source_path: str, **kwargs) -> str:
         """
@@ -472,7 +450,7 @@ class IngestionPipeline:
 
         # 1. Purge from vector store
         try:
-            vs = self._get_qdrant_vectorstore()
+            vs = self.get_qdrant_vectorstore()
             client = vs.get_client()
             delete_qdrant_points_by_doc_id(client, ALL_COLLECTIONS, old_doc_id)
         except Exception as exc:
@@ -504,7 +482,7 @@ class IngestionPipeline:
 
         # 1. Qdrant
         try:
-            vs = self._get_qdrant_vectorstore()
+            vs = self.get_qdrant_vectorstore()
             client = vs.get_client()
             delete_qdrant_points_by_doc_id(client, ALL_COLLECTIONS, doc_id)
         except Exception as exc:
@@ -584,5 +562,5 @@ class IngestionPipeline:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    with IngestionPipeline.create() as pipeline:
+    with IngestionManager.create() as pipeline:
         print("✅ All databases and Qdrant collections initialised successfully.")
