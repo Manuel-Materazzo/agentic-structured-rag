@@ -5,6 +5,7 @@ Implements BaseIngestor to handle technique taxonomy extraction and text indexin
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -17,6 +18,7 @@ from ingestion.ingestors.base_ingestor import BaseIngestor
 from app.config import CHUNK_MAX_CHAR_MANUAL, COLLECTION_MANUAL, KB_DIR, OPENAI_EMBEDDER_API_KEY, \
     OPENAI_EMBEDDER_BASE_URL
 from ingestion.ingestion_manager import IngestionManager
+from model.cook_manual import CookManualParsingResult
 from utils.ingestion_utils import build_payload, normalize_whitespace
 
 log = logging.getLogger(__name__)
@@ -25,29 +27,12 @@ log = logging.getLogger(__name__)
 MANUAL_DIR: Path = KB_DIR / "misc"
 
 # TODO: extract to config
-# TODO: Replace manual JSON schema declaration with a Pydantic model.
 # TODO: generalize, if the manual changes, the values should be updated.
 SYSTEM_PROMPT = """You are a structured entity extractor for a fictionary culinary manual (Manuale di Cucina).
 
 Extract ALL culinary techniques, their macro categories, and required licenses (deduce implicit license requirements logically from the descriptions). 
 Return a JSON object with this EXACT schema:
-
-{
-  "techniques": [
-    {
-      "name": "<technique name>",
-      "macro_category": "<macro category name>",
-      "licenses": [
-        {
-          "license_type": "<license type ('p', 't', 'g', 'e+', 'mx', 'q', 'c', 'ltk')>",
-          "license_grade": "<license grade (converted integer in case of roman numerals, e.g. 'VI -> 6')>"
-        }
-      ]
-    }
-  ],
-  "parsing_confidence": "high" or "low",
-  "parsing_issues": "<description or null>"
-}
+{output_format}
 
 CRITICAL RULES:
 - name: must be the exact name of the culinary technique.
@@ -100,7 +85,8 @@ class CookManualIngestor(BaseIngestor):
 
     @property
     def system_prompt(self) -> str:
-        return SYSTEM_PROMPT
+        output_format = json.dumps(CookManualParsingResult.model_json_schema(), indent=2)
+        return SYSTEM_PROMPT.format(output_format=output_format)
 
     @property
     def collection_name(self) -> str:
