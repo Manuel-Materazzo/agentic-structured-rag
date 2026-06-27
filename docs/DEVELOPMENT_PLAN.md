@@ -132,7 +132,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 - [x] 🔴 `src/ingestion/menu_ingestion.py` — tutti i menu PDF
 - [ ] 🔴 `src/ingestion/manual_ingestion.py` — Manuale di Cucina (tecniche, certificazioni, ordini → `technique_taxonomy`)
-- [ ] 🔴 `src/ingestion/code_ingestion.py` — Codice Galattico (limiti quantitativi → `compliance_rules`)
+- [x] 🔴 `src/ingestion/galactic_code_ingestion.py` — Codice Galattico (limiti quantitativi → `compliance_rules`)
 - [x] 🔴 `src/ingestion/distances_ingestion.py` — Distanze CSV → `planet_distances` in DuckDB
 - [x] 🔴 `src/ingestion/blog_ingestion.py` — Blog post HTML → `blog_index` in Qdrant
 

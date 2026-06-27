@@ -723,7 +723,7 @@ src/
     runner.py
     menu_ingestion.py
     manual_ingestion.py
-    code_ingestion.py
+    galactic_code_ingestion.py
     blog_ingestion.py
     distances_ingestion.py
     structured_extraction.py  # LLM entity extractor
