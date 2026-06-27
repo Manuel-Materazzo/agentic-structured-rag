@@ -56,7 +56,7 @@ class BaseIngestor(ABC):
     @property
     def file_glob(self) -> str:
         """Glob pattern to find files in the directory (defaults to PDF)."""
-        return "*.pdf"
+        return "*"
 
     @property
     def use_vision_fallback(self) -> bool:

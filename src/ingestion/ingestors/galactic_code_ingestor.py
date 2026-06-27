@@ -91,11 +91,6 @@ class GalacticCodeIngestor(BaseIngestor):
         return CODE_DIR
 
     @property
-    def file_glob(self) -> str:
-        # Original code used * to glob all files in the dir
-        return "*"
-
-    @property
     def use_vision_fallback(self) -> bool:
         # Regulatory text is assumed to be machine-readable
         return False

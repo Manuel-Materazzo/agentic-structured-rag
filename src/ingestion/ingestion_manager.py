@@ -107,7 +107,7 @@ class IngestionManager:
                     raw_text=raw_text,
                 )
 
-            parsed_out = PARSED_DIR / f"{doc_id}.json"
+            parsed_out = PARSED_DIR / f"{doc_id}.txt"
             parsed_out.parent.mkdir(parents=True, exist_ok=True)
             with open(parsed_out, "w", encoding="utf-8") as f:
                 json.dump(extraction_result, f, ensure_ascii=False, indent=2)
@@ -159,7 +159,7 @@ class IngestionManager:
         self.km.cascade_delete_duckdb(old_doc_id)
 
         # 3. Remove parsed artefact
-        parsed_out = PARSED_DIR / f"{old_doc_id}.json"
+        parsed_out = PARSED_DIR / f"{old_doc_id}.txt"
         if parsed_out.exists():
             parsed_out.unlink()
 
@@ -186,7 +186,7 @@ class IngestionManager:
         self.km.cascade_delete_duckdb(doc_id)
 
         # 3. Parsed artefact
-        parsed_out = PARSED_DIR / f"{doc_id}.json"
+        parsed_out = PARSED_DIR / f"{doc_id}.txt"
         if parsed_out.exists():
             parsed_out.unlink()
 
