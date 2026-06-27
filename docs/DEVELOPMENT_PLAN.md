@@ -159,14 +159,14 @@ Fase 2 Superata (con item in sospeso)
 
 ### Orchestratore base
 
-- [ ] 🔴 `src/app/orchestrator.py` — loop agentico con `Agent` di datapizza-ai:
+- [x] 🔴 `src/app/orchestrator.py` — loop agentico con `Agent` di datapizza-ai:
   - riceve domanda + `row_id`
   - legge schema DuckDB per capire le entità disponibili
   - produce piano di retrieval JSON serializzabile (§9.2) con `reasoning`, `budget`, `next_handoff`, `query`
   - stima complessità e auto-assegna budget di handoff (Easy: max 1-2, Medium: max 3, Hard/Impossible: max 5)
   - delega al sub-agente SQL
   - legge risultato e decide se convergere
-- [ ] 🔴 Zero risultati SQL → non è risposta finale; l'orchestratore deve disambiguare (nella Fase 4 tramite Qdrant; in questa fase loggare il caso)
+- [x] 🔴 Zero risultati SQL → non è risposta finale; l'orchestratore deve disambiguare (nella Fase 4 tramite Qdrant; in questa fase loggare il caso)
 
 ### Sintesi e normalizzazione
 
@@ -203,10 +203,10 @@ Fase 2 Superata (con item in sospeso)
 
 ### Estensione orchestratore
 
-- [ ] 🔴 Orchestratore esteso per gestire handoff verso `qdrant_agent` oltre a `sql_agent`
-- [ ] 🔴 Logica a tre rami (§9.5): Solo DuckDB / DuckDB + Qdrant / Solo Qdrant (quest'ultimo con parsimonia)
-- [ ] 🔴 Gestione zero result SQL: handoff a Qdrant per disambiguare, poi retry SQL con entità risolte
-- [ ] 🔴 Budget di handoff rispettato e loggato; superamento budget → esplicitare nel reasoning
+- [x] 🔴 Orchestratore esteso per gestire handoff verso `qdrant_agent` oltre a `sql_agent`
+- [x] 🔴 Logica a tre rami (§9.5): Solo DuckDB / DuckDB + Qdrant / Solo Qdrant (quest'ultimo con parsimonia)
+- [x] 🔴 Gestione zero result SQL: handoff a Qdrant per disambiguare, poi retry SQL con entità risolte
+- [x] 🔴 Budget di handoff rispettato e loggato; superamento budget → esplicitare nel reasoning
 
 ### Logica Medium (§12.2)
 
