@@ -89,19 +89,19 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### 2.1 Parsing e confidenza
 
-- [ ] 🔴 `src/ingestion/menu_ingestion.py` — usa `DoclingParser` per parsare ogni menu PDF; salva output in `data/parsed/`
-- [ ] 🔴 Richiesta LLM di entity extraction restituisce obbligatoriamente il campo `parsing_confidence` (`"high"` / `"low"`) e `parsing_issues`
+- [x] 🔴 `src/ingestion/menu_ingestion.py` — usa `DoclingParser` per parsare ogni menu PDF; salva output in `data/parsed/`
+- [x] 🔴 Richiesta LLM di entity extraction restituisce obbligatoriamente il campo `parsing_confidence` (`"high"` / `"low"`) e `parsing_issues`
 - [ ] 🔴 `src/ingestion/vision_fallback.py` — se `parsing_confidence == "low"`, rilancia il documento in modalità vision e ripete l'extraction con lo stesso prompt
 - [ ] 🟡 Definire la soglia esatta di "low": il LLM deve dichiarare "non sono riuscito a estrarre entità coerenti", non semplicemente "il testo era disordinato"
 
 ### 2.2 Entity extraction LLM
 
-- [ ] 🔴 `src/ingestion/structured_extraction.py` — prompt strutturato che estrae per ogni piatto:
+- [x] 🔴 `src/ingestion/structured_extraction.py` — prompt strutturato che estrae per ogni piatto:
   - `name`, `restaurant`, `ingredients[]` (con `quantity_grams` FLOAT o null e `quantity_raw` testo originale), `techniques[]`, `preparation_notes`
   - `chef`, `planet`, `chef_license`, `professional_orders[]` per il ristorante
   - Output: JSON con schema fisso, nessun testo libero aggiuntivo
-- [ ] 🔴 Normalizzazione quantità: il LLM produce `FLOAT` con punto decimale o `null` esplicito (mai `0.0` per "quanto basta"); `quantity_raw` sempre valorizzato
-- [ ] 🔴 Range check post-extraction: valori `quantity_grams` fuori range plausibile → warning loggato e forzato a `null`
+- [x] 🔴 Normalizzazione quantità: il LLM produce `FLOAT` con punto decimale o `null` esplicito (mai `0.0` per "quanto basta"); `quantity_raw` sempre valorizzato
+- [x] 🔴 Range check post-extraction: valori `quantity_grams` fuori range plausibile → warning loggato e forzato a `null`
 
 ### 2.3 Scrittura nei due store
 
