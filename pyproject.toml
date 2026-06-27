@@ -15,6 +15,13 @@ authors = [
 dependencies = [
   "click>=8.1.8",
   "pandas>=2.0.0",
+  "duckdb>=1.0.0",
+  "dotenv",
+  "datapizza-ai-core",
+  "datapizza-ai-clients-openai",
+  "datapizza-ai-embedders-openai",
+  "datapizza-ai-vectorstores-qdrant",
+  "datapizza-ai-parsers-docling",
 ]
 
 [project.optional-dependencies]
