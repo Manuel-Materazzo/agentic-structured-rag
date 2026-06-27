@@ -22,7 +22,7 @@ from metrics.jaccard_similarity import score
 def main(submission: str, row_id_column: str) -> None:
     """Evaluate a submission CSV using the Jaccard similarity metric used in Kaggle."""
 
-    solution_path = "./dataset/ground_truth/ground_truth_mapped.csv"
+    solution_path = "./Dataset/ground_truth/ground_truth_mapped.csv"
 
     # Load data
     solution_df = pd.read_csv(solution_path)
