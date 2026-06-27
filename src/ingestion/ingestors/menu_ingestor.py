@@ -34,6 +34,8 @@ Extract ALL dishes from the provided menu text and return a JSON object with thi
 CRITICAL RULES:
 - quantity_grams: FLOAT with decimal point (e.g. 200.0) or null. NEVER use 0.0 for "as much as needed", "to taste", "traces", or unquantifiable amounts.
 - quantity_raw: ALWAYS populate with the original text (e.g. "200g", "as much as needed", "3 leaves").
+- Pay attention to the license grade, it could be written in roman numerals, you MUST convert it (e.g. I -> 1, II -> 2, III -> 3, etc.).
+- Deduce licenses if the name doesn't match perfectly.
 - parsing_confidence: Use "low" ONLY if you could NOT extract coherent entity structure. NOT just because the text was messy or sounds fictional.
 - Output ONLY the JSON object. No additional text, markdown, or explanation.
 """
@@ -107,13 +109,25 @@ class MenuIngestor(BaseIngestor):
             facts_con.execute(
                 """
                 INSERT INTO restaurants
-                    (id, name, chef, planet, chef_license, professional_orders, doc_id)
+                    (id, name, chef, planet, professional_orders, doc_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    rest_id, rest_name, rest_data.get("chef", "").lower(), rest_data.get("planet", "").lower(),
-                    rest_data.get("chef_license", "").lower(), lowercase_professiona_orders, doc_id,
+                    rest_id, rest_name, rest_data.get("chef", "").lower(), rest_data.get("planet", "").lower(), lowercase_professiona_orders, doc_id,
                 ],
+            )
+
+        # Insert licenses
+        for license in extraction_result.get("licenses", []):
+            # Lowercase data for normalization
+            license_type = license.get("license_type").lower()
+            license_grade = license.get("license_grade").lower()
+            facts_con.execute(
+                """
+                INSERT INTO chef_licenses (restaurant_id, license_type, license_grade)
+                VALUES (?, ?, ?) ON CONFLICT DO NOTHING
+                """,
+                [rest_id, license_type, license_grade],
             )
 
         # Insert dishes

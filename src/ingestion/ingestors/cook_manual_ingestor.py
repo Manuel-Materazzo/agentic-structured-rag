@@ -40,7 +40,7 @@ Return a JSON object with this EXACT schema:
       "licenses": [
         {
           "license_type": "<license type ('p', 't', 'g', 'e+', 'mx', 'q', 'c', 'ltk')>",
-          "license_grade": "<license grade (converted integer for specific levels like 'VI -> 6')>"
+          "license_grade": "<license grade (converted integer in case of roman numerals, e.g. 'VI -> 6')>"
         }
       ]
     }

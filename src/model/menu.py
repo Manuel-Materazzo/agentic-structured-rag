@@ -14,10 +14,6 @@ class Restaurant(BaseModel):
         default=None,
         description="The planet where the restaurant is located, or null if unknown."
     )
-    chef_license: Optional[str] = Field(
-        default=None,
-        description="The ID or designation of the chef's professional culinary license, or null if unknown."
-    )
     professional_orders: List[str] = Field(
         description="A list of professional associations or culinary orders the restaurant belongs to. Leave empty if none."
     )
@@ -52,12 +48,24 @@ class Dish(BaseModel):
     )
 
 
+class License(BaseModel):
+    license_type: str = Field(
+        description="Type of license held. Must strictly map to one of these shortcodes: 'p' (Psionica), 't' (Temporale), 'g' (Gravitazionale), 'e+' (Antimateria), 'mx' (Magnetica), 'q' (Quantistica), 'c' (Luce), 'ltk' (Livello di Sviluppo Tecnologico)"
+    )
+    license_grade: int = Field(
+        description="License grade (converted integer in case of roman numerals, e.g. 'VI -> 6')"
+    )
+
+
 class RestaurantData(BaseModel):
     restaurant: Restaurant = Field(
         description="Details about the dining establishment."
     )
     dishes: List[Dish] = Field(
         description="A list of dishes offered by the restaurant."
+    )
+    licenses: List[License] = Field(
+        description="A list of the restaurant chef's professional culinary licenses."
     )
     parsing_confidence: Literal["high", "low"] = Field(
         description="Must be exactly 'high' or 'low'. Use 'high' if all critical data was successfully extracted, and 'low' if key details were missing, ambiguous, or failed calculation."
