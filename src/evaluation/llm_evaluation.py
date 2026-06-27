@@ -1,5 +1,5 @@
 """
-evaluate_results.py — Confronta le risposte generate (da run_inference.py) con la ground truth usando un LLM.
+llm_evaluation.py — Confronta le risposte generate (da run_inference.py) con la ground truth usando un LLM.
 Legge 'inference_results.csv' e produce 'evaluated_results.csv'.
 """
 import csv
@@ -12,8 +12,9 @@ from src.app.config import LLM_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL
 log = logging.getLogger(__name__)
 
 DATASET_DIR = Path("Dataset")
-INPUT_CSV = DATASET_DIR / "inference_results.csv"
-OUTPUT_CSV = DATASET_DIR / "evaluated_results.csv"
+OUTPUT_DIR = Path("output")
+INPUT_CSV = OUTPUT_DIR / "inference_results.csv"
+OUTPUT_CSV = OUTPUT_DIR / "evaluated_results.csv"
 
 
 def get_llm_client():

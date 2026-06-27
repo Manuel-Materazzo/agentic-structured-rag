@@ -3,7 +3,6 @@ run_inference.py — Esegue l'SQLAgent sulle domande del dataset e salva i risul
 legge "domande_con_risposte.csv" e produce "inference_results.csv"
 """
 import csv
-import difflib
 import logging
 from pathlib import Path
 
@@ -15,8 +14,9 @@ from utils.normalizer_utils import extract_dishes_from_rows
 log = logging.getLogger(__name__)
 
 DATASET_DIR = Path("Dataset")
+OUTPUT_DIR = Path("output")
 INPUT_CSV = DATASET_DIR / "domande_con_risposte.csv"
-OUTPUT_CSV = DATASET_DIR / "inference_results.csv"
+OUTPUT_CSV = OUTPUT_DIR / "inference_results.csv"
 
 
 def start_inference():

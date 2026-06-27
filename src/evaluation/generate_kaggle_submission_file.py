@@ -1,10 +1,5 @@
 """
-submission.py — Dish mapping loader and CSV submission exporter.
-
-Responsibilities:
-- Load Dataset/ground_truth/dish_mapping.json at startup
-- Map dish name strings → integer IDs
-- Export output/submission.csv with row_id and result columns
+generate_kaggle_submission_file.py — Generates a kaggle-compatible submission file from the inference_results.csv file.
 """
 
 from __future__ import annotations
