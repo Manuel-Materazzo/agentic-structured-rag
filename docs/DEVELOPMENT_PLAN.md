@@ -53,8 +53,8 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### Configurazione progetto
 
-- [ ] 🔴 `src/app/config.py` — percorsi, parametri LLM, dimensione embedding, soglie; tutto leggibile da variabili d'ambiente
-- [ ] 🔴 File `requirements.txt` / `pyproject.toml` completo e lockato
+- [x] 🔴 `src/app/config.py` — percorsi, parametri LLM, dimensione embedding, soglie; tutto leggibile da variabili d'ambiente
+- [x] 🔴 File `requirements.txt` / `pyproject.toml` completo e lockato
 
 ### Database
 
