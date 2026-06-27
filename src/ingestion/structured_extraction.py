@@ -135,9 +135,9 @@ def _parse_document(source_path: str, source_type: str) -> str:
 
 
 def _get_llm_client(model: str):
-    from datapizza.clients.openai import OpenAIClient
+    from datapizza.clients.openai_like import OpenAILikeClient
     from src.app.config import OPENAI_API_KEY, OPENAI_BASE_URL
-    return OpenAIClient(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL, model=model)
+    return OpenAILikeClient(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL, model=model)
 
 
 def _build_extraction_prompt(raw_text: str, source_type: str) -> str:
