@@ -26,16 +26,23 @@ MANUAL_DIR: Path = KB_DIR / "misc"
 
 # TODO: extract to config
 # TODO: Replace manual JSON schema declaration with a Pydantic model.
+# TODO: generalize, if the manual changes, the values should be updated.
 SYSTEM_PROMPT = """You are a structured entity extractor for a fictionary culinary manual (Manuale di Cucina).
 
-Extract ALL culinary techniques, their macro categories, and required license levels. Return a JSON object with this EXACT schema:
+Extract ALL culinary techniques, their macro categories, and required licenses (deduce implicit license requirements logically from the descriptions). 
+Return a JSON object with this EXACT schema:
 
 {
   "techniques": [
     {
       "name": "<technique name>",
       "macro_category": "<macro category name>",
-      "required_license_level": "<license level (e.g. 'Level A', 'Level B') or null>"
+      "licenses": [
+        {
+          "license_type": "<license type ('p', 't', 'g', 'e+', 'mx', 'q', 'c', 'ltk')>",
+          "license_grade": "<license grade (converted integer for specific levels like 'VI -> 6')>"
+        }
+      ]
     }
   ],
   "parsing_confidence": "high" or "low",
@@ -44,8 +51,19 @@ Extract ALL culinary techniques, their macro categories, and required license le
 
 CRITICAL RULES:
 - name: must be the exact name of the culinary technique.
-- macro_category: the broad category the technique belongs to.
-- required_license_level: the professional license required to perform the technique, or null if not specified.
+- macro_category: the broad category the technique belongs to (must be one of: marinatura, affumicatura, fermentazione, impasto, surgelamento, bollitura, grigliatura, forno, vapore, sottovuoto, saltare in padella, decostruzione, sferificazione, taglio).
+- licenses: this is a list of ALL licenses required to perform the technique. If a technique implies multiple licenses (e.g., both Gravitational and Technological Development), include all of them.
+- license_type: must strictly map to one of these shortcodes based on the manual:
+  * 'p' for Psionica
+  * 't' for Temporale
+  * 'g' for Gravitazionale
+  * 'e+' for Antimateria
+  * 'mx' for Magnetica
+  * 'q' for Quantistica
+  * 'c' for Luce
+  * 'ltk' for Livello di Sviluppo Tecnologico
+- Pay attention to the license grade required for each technique, it could be written in roman numerals, you MUST convert it (e.g. I -> 1, II -> 2, III -> 3, etc.).
+- Deduce implicit license requirements logically from the descriptions (e.g., alternating gravity requires 'g' grade 1, high energy precision machinery requires 'ltk' grade 2).
 - Output ONLY the JSON object. No additional text, markdown, or explanation.
 """
 
@@ -112,13 +130,11 @@ class CookManualIngestor(BaseIngestor):
 
     def write_db_entries(self, extraction_result: dict[str, Any], doc_id: str,
                          facts_con: duckdb.DuckDBPyConnection) -> None:
-        """Write extracted techniques to the technique_taxonomy table."""
+        """Write extracted techniques to the technique_taxonomy and technique_licenses tables."""
         techniques = extraction_result.get("techniques", [])
         for tech in techniques:
-            # Lowercase data for normalization
-            name = tech.get("name").lower()
-            macro_category = tech.get("macro_category").lower()
-            required_license = tech.get("required_license_level").lower()
+            name = tech.get("name", "").lower()
+            macro_category = tech.get("macro_category", "").lower()
 
             if not name or not macro_category:
                 log.warning("Skipping incomplete technique: %s", tech)
@@ -126,14 +142,31 @@ class CookManualIngestor(BaseIngestor):
 
             facts_con.execute(
                 """
-                INSERT INTO technique_taxonomy (technique, macro_category, required_license_level)
-                VALUES (?, ?, ?)
+                INSERT INTO technique_taxonomy (technique, macro_category)
+                VALUES (?, ?)
                 ON CONFLICT(technique) DO UPDATE SET
-                    macro_category = excluded.macro_category,
-                    required_license_level = excluded.required_license_level
+                    macro_category = excluded.macro_category
                 """,
-                [name, macro_category, required_license],
+                [name, macro_category],
             )
+
+            for lic in tech.get("licenses", []):
+                license_type = lic.get("license_type", "").lower()
+                license_grade = lic.get("license_grade")
+
+                if not license_type or license_grade is None:
+                    log.warning("Skipping incomplete license for technique '%s': %s", name, lic)
+                    continue
+
+                facts_con.execute(
+                    """
+                    INSERT INTO technique_licenses (technique, license_type, license_grade)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(technique, license_type, license_grade) DO NOTHING
+                    """,
+                    [name, license_type, int(license_grade)],
+                )
+
         log.info("Wrote %d techniques for doc %s", len(techniques), doc_id[:8])
 
     def make_vector_indexer(self, ingestion_manager: IngestionManager, source_path: Path, raw_text: str) -> Callable[

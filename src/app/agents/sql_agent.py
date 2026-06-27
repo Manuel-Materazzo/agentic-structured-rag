@@ -98,7 +98,7 @@ class SQLAgent:
         self._connection = knowledge_manager.get_facts_db()
         self._llm_client = llm_client or self._get_llm_client()
         # Preload DB schema
-        self._schema = json.dumps(get_schema_overview(self._connection), ensure_ascii=False, indent=2)
+        self._schema = get_schema_overview(self._connection)
 
     def execute(self, request: str, max_retries: int = 2) -> SQLAgentResult:
         # Build the initial prompt with schema and request
