@@ -13,6 +13,8 @@ import math
 from pathlib import Path
 from typing import Any, Optional
 
+from json_repair import json_repair
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -20,7 +22,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # TODO: Externalise to config.
-_MAX_INPUT_CHARS = 12_000
+_MAX_INPUT_CHARS = 60_000
 _MAX_PLAUSIBLE_GRAMS = 100_000.0  # 100 kg — clearly wrong if exceeded
 
 
@@ -70,11 +72,13 @@ def extract_entities(
         result = _parse_json_response(response.text)
     except Exception as exc:
         log.error("LLM extraction failed for %s: %s", source_path, exc)
-        result = {
-            "parsing_confidence": "low",
-            "parsing_issues": str(exc),
-            source_type: []  # ensure a list exists for the expected entities
-        }
+        # Raise an exception if it's a connection/API error,
+        # so the manager can stop instead of doing the vision fallback.
+        raise RuntimeError(f"LLM API Error: {exc}") from exc
+
+    # If the LLM responded but said the text is incomprehensible
+    if result.get("parsing_confidence") == "low":
+        log.warning("LLM reported low parsing confidence for %s", source_path)
 
     # Post-process quantities for menus, it's a special case
     if source_type == "menu":
@@ -128,19 +132,15 @@ def _build_extraction_prompt(raw_text: str, source_type: str) -> str:
 
 
 def _parse_json_response(text: str) -> dict[str, Any]:
-    #TODO: use json_repair library
-    text = text.strip()
-    if not text:
-        return {"parsing_confidence": "low", "parsing_issues": "Empty response from LLM"}
-    if text.startswith("```"):
-        lines = text.splitlines()
-        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
     try:
-        return json.loads(text)
+        parsed = json_repair.loads(text)
+        if not parsed:
+            return {"parsing_confidence": "low", "parsing_issues": "Empty response from LLM"}
     except json.JSONDecodeError:
         # If JSON is broken, return low confidence to avoid crashes
         return {"parsing_confidence": "low", "parsing_issues": "Invalid JSON returned", "raw_text": text}
 
+    return parsed
 
 def _postprocess_quantities(result: dict[str, Any]) -> dict[str, Any]:
     #TODO: generalize to all quantities
