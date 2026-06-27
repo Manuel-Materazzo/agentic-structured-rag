@@ -17,7 +17,7 @@ from ingestion.ingestors.base_ingestor import BaseIngestor
 from src.app.config import CHUNK_MAX_CHAR_MANUAL, COLLECTION_MANUAL, KB_DIR, OPENAI_API_KEY, OPENAI_EMBEDDER_API_KEY, \
     OPENAI_EMBEDDER_BASE_URL
 from src.ingestion.ingestion_manager import IngestionManager
-from src.ingestion.shared import build_payload, normalize_whitespace
+from src.utils.ingestion_utils import build_payload, normalize_whitespace
 
 log = logging.getLogger(__name__)
 

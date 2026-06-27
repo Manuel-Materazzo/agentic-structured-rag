@@ -28,7 +28,7 @@ from src.app.config import (
     QDRANT_LOCATION,
     QDRANT_PORT,
 )
-from src.ingestion.shared import delete_qdrant_points_by_doc_id
+from src.utils.ingestion_utils import delete_qdrant_points_by_doc_id
 
 log = logging.getLogger(__name__)
 
