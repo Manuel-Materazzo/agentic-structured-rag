@@ -124,14 +124,20 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     description TEXT,
     PRIMARY KEY (table_name, column_name)
 );
--- hide tables
-INSERT INTO schema_meta VALUES ('documents', '', FALSE, NULL);
-INSERT INTO schema_meta VALUES ('schema_meta', '', FALSE, NULL);
+-- hide tables and column that are not relevant for the task
+INSERT INTO schema_meta VALUES ('documents', '', FALSE, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('schema_meta', '', FALSE, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('compliance_rules', 'doc_id', FALSE, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('dishes', 'doc_id', FALSE, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('restaurants', 'doc_id', FALSE, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('dish_ingredients', 'is_regulated', FALSE, NULL) ON CONFLICT DO NOTHING; -- TODO: not populated yet
 -- annotate columns
-INSERT INTO schema_meta VALUES ('chef_licenses', 'license_type', TRUE, 'Type of license held. Maps strictly to one of these shortcodes: ''p'' (Psionica), ''t'' (Temporale), ''g'' (Gravitazionale), ''e+'' (Antimateria), ''mx'' (Magnetica), ''q'' (Quantistica), ''c'' (Luce), ''ltk'' (Livello di Sviluppo Tecnologico)');
-INSERT INTO schema_meta VALUES ('chef_licenses', 'license_grade', TRUE, 'integer grade of the license. romanian numbers are converted to integers. Use >= for minimum checks.');
-INSERT INTO schema_meta VALUES ('technique_licenses', 'license_type', TRUE, 'Type of license held. Maps strictly to one of these shortcodes: ''p'' (Psionica), ''t'' (Temporale), ''g'' (Gravitazionale), ''e+'' (Antimateria), ''mx'' (Magnetica), ''q'' (Quantistica), ''c'' (Luce), ''ltk'' (Livello di Sviluppo Tecnologico)');
-INSERT INTO schema_meta VALUES ('technique_licenses', 'license_grade', TRUE, 'integer grade of the license. romanian numbers are converted to integers. Use >= for minimum checks.');
+INSERT INTO schema_meta VALUES ('chef_licenses', 'license_type', TRUE, 'Type of license held. Maps strictly to one of these shortcodes: ''p'' (Psionica), ''t'' (Temporale), ''g'' (Gravitazionale), ''e+'' (Antimateria), ''mx'' (Magnetica), ''q'' (Quantistica), ''c'' (Luce), ''ltk'' (Livello di Sviluppo Tecnologico)') ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('chef_licenses', 'license_grade', TRUE, 'integer grade of the license. romanian numbers are converted to integers. Use >= for minimum checks.') ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('technique_licenses', 'license_type', TRUE, 'Type of license held. Maps strictly to one of these shortcodes: ''p'' (Psionica), ''t'' (Temporale), ''g'' (Gravitazionale), ''e+'' (Antimateria), ''mx'' (Magnetica), ''q'' (Quantistica), ''c'' (Luce), ''ltk'' (Livello di Sviluppo Tecnologico)') ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('technique_licenses', 'license_grade', TRUE, 'integer grade of the license. romanian numbers are converted to integers. Use >= for minimum checks.') ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('dish_techniques', 'technique', TRUE, 'full technique name, refer to technique_taxonomy for the category.') ON CONFLICT DO NOTHING;
+INSERT INTO schema_meta VALUES ('technique_taxonomy', 'technique', TRUE, 'full technique name.') ON CONFLICT DO NOTHING;
 
 CREATE SEQUENCE IF NOT EXISTS compliance_rules_id_seq START 1;
 """

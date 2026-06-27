@@ -39,7 +39,7 @@ FUZZY MATCHING:
 - Names in the DB may differ slightly from how they appear in the user's request (typos, gender, accents, truncations).
 - NEVER filter with exact equality (=) on free-text fields like technique, ingredient, or dish name.
 - Always use jaro_winkler_similarity(field, 'value') > 0.93 for matching these fields.
-- Always use LOWERCASE('value') for TEXT comparations.
+- Always use LOWERCASE('value') for TEXT comparations. Assume everything in database is lowercased.
 - Use EXISTS / NOT EXISTS subqueries with jaro_winkler_similarity, never IN / NOT IN with exact strings.
 - Example of correct technique filter:
     EXISTS (
