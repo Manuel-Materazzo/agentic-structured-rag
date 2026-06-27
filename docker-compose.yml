@@ -1,0 +1,27 @@
+services:
+  agentic-structured-rag:
+    container_name: agentic-structured-rag
+    image: agentic-structured-rag
+    environment:
+      MODE: api # Valid modes: ingestion | api | inference | evaluate
+      OPENAI_API_KEY: fake-key
+      OPENAI_EMBEDDER_API_KEY: fake-key
+      OPENAI_BASE_URL: http://host.docker.internal:1234/v1
+      OPENAI_EMBEDDER_BASE_URL: http://host.docker.internal:1234/v1
+      LLM_MODEL: qwen3.5-4b
+      LLM_MAX_TOKENS: 16000
+      EMBEDDING_MODEL: text-embedding-multilingual-e5-base
+      EMBEDDING_DIM: 768
+    build:
+      dockerfile: Dockerfile
+      context: '.'
+    security_opt:
+      - no-new-privileges
+    cap_drop:
+      - ALL
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./data-test:/data
+      - ./Dataset:/Dataset
+      - ./output:/output
