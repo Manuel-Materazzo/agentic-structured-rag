@@ -3,30 +3,25 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "test-tecnico-ai-engineer"
+name = "agentic-structured-rag"
 version = "0.1.0"
-description = "Dataset, evaluation scripts and metrics (Jaccard similarity) for the AI engineer technical test."
-readme = "README.md"
-requires-python = ">=3.9"
-license = { text = "Proprietary" }
-authors = [
-  { name = "Sisco" },
-]
+description = "Add your description here"
+requires-python = ">=3.10"
 dependencies = [
-  "click>=8.1.8",
-  "pandas>=2.0.0",
-  "duckdb>=1.0.0",
-  "json-repair",
-  "dotenv",
-  "datapizza-ai-core",
-  "datapizza-ai-clients-openai",
-  "datapizza-ai-embedders-openai",
-  "datapizza-ai-vectorstores-qdrant",
-  "datapizza-ai-parsers-docling",
+    "click>=8.1.8",
+    "pandas>=2.0.0",
+    "duckdb>=1.0.0",
+    "json-repair",
+    "dotenv",
+    "fastapi",
+    "pandas",
+    "uvicorn",
+    "datapizza-ai",
+    "datapizza-ai-clients-openai-like",
+    "datapizza-ai-embedders-openai",
+    "datapizza-ai-vectorstores-qdrant",
+    "datapizza-ai-parsers-docling",
 ]
 
-[project.optional-dependencies]
-dev = [
-  "pytest>=8.0.0",
-]
-
+[tool.setuptools.packages.find]
+where = ["src"]
