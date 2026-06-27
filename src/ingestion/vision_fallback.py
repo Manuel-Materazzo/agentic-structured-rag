@@ -108,7 +108,8 @@ def _parse_with_llm_vision(source_path: str) -> str:
                             "type": "text",
                             "text": (
                                 "Extract all text from this menu page faithfully, "
-                                "preserving dish names, ingredients and quantities. "
+                                "Documents use a mix of normal and roman numbers, "
+                                "especially when talking about licenses. "
                                 "Output plain text only."
                             ),
                         },
