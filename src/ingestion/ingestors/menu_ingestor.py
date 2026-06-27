@@ -5,6 +5,7 @@ Implements BaseIngestor to handle menu-specific parsing, extraction, and indexin
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -14,7 +15,8 @@ from typing import Any, Callable
 import duckdb
 
 from ingestion.ingestors.base_ingestor import BaseIngestor
-from src.app.config import CHUNK_MAX_CHAR_MENU, COLLECTION_MENU, KB_DIR, OPENAI_API_KEY, OPENAI_EMBEDDER_API_KEY, \
+from model.menu import RestaurantData
+from src.app.config import CHUNK_MAX_CHAR_MENU, COLLECTION_MENU, KB_DIR, OPENAI_EMBEDDER_API_KEY, \
     OPENAI_EMBEDDER_BASE_URL
 from src.ingestion.ingestion_manager import IngestionManager
 from src.ingestion.shared import build_payload
@@ -24,36 +26,10 @@ log = logging.getLogger(__name__)
 MENU_DIR: Path = KB_DIR / "menu"
 
 # TODO: extract to config
-# TODO: Replace manual JSON schema declaration with a Pydantic model.
 SYSTEM_PROMPT = """You are a structured entity extractor for a fictionary restaurant menu database.
 
 Extract ALL dishes from the provided menu text and return a JSON object with this EXACT schema:
-
-{
-  "restaurant": {
-    "name": "<string>",
-    "chef": "<string or null>",
-    "planet": "<string or null>",
-    "chef_license": "<string or null>",
-    "professional_orders": ["<order1>", ...]
-  },
-  "dishes": [
-    {
-      "name": "<dish name>",
-      "ingredients": [
-        {
-          "name": "<ingredient name>",
-          "quantity_grams": <float or null>,
-          "quantity_raw": "<original quantity text>"
-        }
-      ],
-      "techniques": ["<technique1>", "<technique2>"],
-      "preparation_notes": "<text or null>"
-    }
-  ],
-  "parsing_confidence": "high" or "low",
-  "parsing_issues": "<description or null>"
-}
+{output_format}
 
 CRITICAL RULES:
 - quantity_grams: FLOAT with decimal point (e.g. 200.0) or null. NEVER use 0.0 for "as much as needed", "to taste", "traces", or unquantifiable amounts.
@@ -95,7 +71,8 @@ class MenuIngestor(BaseIngestor):
 
     @property
     def system_prompt(self) -> str:
-        return SYSTEM_PROMPT
+        output_format = json.dumps(RestaurantData.model_json_schema(), indent=2)
+        return SYSTEM_PROMPT.format(output_format=output_format)
 
     @property
     def collection_name(self) -> str:
