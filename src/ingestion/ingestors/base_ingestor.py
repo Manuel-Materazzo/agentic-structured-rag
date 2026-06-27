@@ -97,6 +97,14 @@ class BaseIngestor(ABC):
         pass
 
     @abstractmethod
+    def read_db_entries_for_embedding(self, doc_id: str, facts_con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+        """
+        Retrieve metadata from DB for a doc_id.
+        Needed to make Ingestion Phases independent.
+        """
+        pass
+
+    @abstractmethod
     def make_vector_indexer(
             self,
             ingestion_manager: IngestionManager,
@@ -153,24 +161,38 @@ class BaseIngestor(ABC):
             source_path = str(file_path)
             existing = ingestion_manager.km.log_get(source_path)
 
-            if existing and existing["doc_id"] == doc_id and existing["status"] == "complete":
-                log.info("Skip (already complete): %s", file_path.name)
-                continue
+            # Check and skip documents that have already completed fist ingestion phase
+            if existing and existing["doc_id"] == doc_id and existing["status"] in ["complete", "indexed", "embedding", "extracted"]:
+                cache_path = PARSED_DIR / f"{doc_id}.txt"
+                if cache_path.exists():
+                    log.info("Loading cached parsed text for %s", file_path.name)
+                    parsed_docs.append((doc_id, source_path, cache_path))
+                    continue
+                else:
+                    # Safety fallback: if cache was deleted but DB says "extracted",
+                    # we must reparse, but without touching DB status!
+                    log.warning("Cache missing for %s, reparsing without changing DB status.", file_path.name)
+                    raw_text = self.parse_document(file_path)
+                    cache_path.write_text(raw_text, encoding="utf-8")
+                    parsed_docs.append((doc_id, source_path, cache_path))
+                    continue
 
+            # File Change Handling (Update)
             if existing and existing["doc_id"] != doc_id:
                 self._handle_file_change(existing["doc_id"], doc_id, source_path, ingestion_manager)
-            else:
-                ingestion_manager.km.log_upsert(doc_id, source_path, "parsing")
+                # Now existing has been deleted, proceed as if it's a new file
+
+            # New file or failed during parsing: update status to "parsing"
+            ingestion_manager.km.log_upsert(doc_id, source_path, "parsing")
 
             cache_path = PARSED_DIR / f"{doc_id}.txt"
 
             if cache_path.exists():
                 log.info("Loading cached parsed text for %s", file_path.name)
-                ingestion_manager.km.log_upsert(doc_id, source_path, "parsed")
+                ingestion_manager.km.log_set_status(doc_id, "parsed")
                 parsed_docs.append((doc_id, source_path, cache_path))
                 continue
 
-            ingestion_manager.km.log_upsert(doc_id, source_path, "parsing")
             try:
                 raw_text = self.parse_document(file_path)
                 cache_path.write_text(raw_text, encoding="utf-8")
@@ -195,6 +217,18 @@ class BaseIngestor(ABC):
         extracted_docs: list[tuple[str, str, Path, dict]] = []
 
         for doc_id, source_path, cache_path in parsed_docs:
+            # Check current db state
+            existing = ingestion_manager.km.log_get(source_path)
+            log.info("checking extraction on: %s, i got %s", source_path, existing)
+            if (existing and existing["doc_id"] == doc_id and
+                    existing["status"] in ["extracted", "embedding", "indexed"]):
+                log.info("Skipping LLM extraction (already extracted): %s", source_path)
+                db_data = self.read_db_entries_for_embedding(doc_id, ingestion_manager.km.facts_con)
+                extracted_docs.append((doc_id, source_path, cache_path, db_data))
+                continue
+
+            log.info("starting extraction")
+            # if it's not extracted, do it
             ingestion_manager.km.log_set_status(doc_id, "extracting")
             try:
                 raw_text = cache_path.read_text(encoding="utf-8")
@@ -214,7 +248,10 @@ class BaseIngestor(ABC):
                     extraction_result, doc_id, source_path, self.source_type, self.write_db_entries
                 )
                 ingestion_manager.km.log_set_status(doc_id, "extracted")
-                extracted_docs.append((doc_id, source_path, cache_path, extraction_result))
+
+                # Recover data from DB
+                db_data = self.read_db_entries_for_embedding(doc_id, ingestion_manager.km.facts_con)
+                extracted_docs.append((doc_id, source_path, cache_path, db_data))
 
             except RuntimeError as exc:
                 log.error("LLM API error for %s. Skipping. %s", source_path, exc)
@@ -237,6 +274,12 @@ class BaseIngestor(ABC):
         successful_doc_ids: list[str] = []
 
         for doc_id, source_path, cache_path, extraction_result in extracted_docs:
+            existing = ingestion_manager.km.log_get(source_path)
+            if existing and existing["doc_id"] == doc_id and existing["status"] == "complete":
+                log.info("Skip (already complete): %s", source_path)
+                successful_doc_ids.append(doc_id)
+                continue
+
             ingestion_manager.km.log_set_status(doc_id, "embedding")
             try:
                 raw_text = cache_path.read_text(encoding="utf-8")

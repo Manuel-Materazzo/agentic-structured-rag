@@ -111,6 +111,7 @@ class DistancesIngestor(BaseIngestor):
         """
                 Distances are not indexed in Qdrant. Returning a no-op callback.
         """
+
         def _noop_indexer(doc_id: str, source_path: str, extraction_result: dict) -> None:
             log.info("Skipping Qdrant indexing for distances (deterministic data).")
             pass
@@ -170,3 +171,6 @@ class DistancesIngestor(BaseIngestor):
                 ingestion_manager.km.log_set_status(doc_id, "failed", str(exc))
 
         return successful_doc_ids
+
+    def read_db_entries_for_embedding(self, doc_id: str, facts_con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+        return {}

@@ -204,3 +204,12 @@ class MenuIngestor(BaseIngestor):
                     os.remove(tmp_path)
 
         return _index
+
+    def read_db_entries_for_embedding(self, doc_id: str, facts_con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+        """Recover DB Metadata"""
+        row = facts_con.execute(
+            "SELECT name FROM restaurants WHERE doc_id = ? LIMIT 1", [doc_id]
+        ).fetchone()
+
+        restaurant_name = row[0] if row else "unknown"
+        return {"restaurant": {"name": restaurant_name}}

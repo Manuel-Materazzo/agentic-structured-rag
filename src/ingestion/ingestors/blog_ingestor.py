@@ -165,3 +165,6 @@ class BlogIngestor(BaseIngestor):
                     os.remove(tmp_path)
 
         return _index
+
+    def read_db_entries_for_embedding(self, doc_id: str, facts_con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+        return {}
