@@ -278,6 +278,275 @@ def init_qdrant_collections() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Document lifecycle: ingest / update / delete
+# ---------------------------------------------------------------------------
+
+def _cascade_delete_duckdb(facts_con: duckdb.DuckDBPyConnection, doc_id: str):
+    """Remove all DuckDB rows associated with a doc_id (cascade order)."""
+    facts_con.execute(
+        "DELETE FROM dish_techniques WHERE dish_id IN "
+        "(SELECT id FROM dishes WHERE doc_id = ?)", [doc_id]
+    )
+    facts_con.execute(
+        "DELETE FROM dish_ingredients WHERE dish_id IN "
+        "(SELECT id FROM dishes WHERE doc_id = ?)", [doc_id]
+    )
+    facts_con.execute("DELETE FROM dishes WHERE doc_id = ?", [doc_id])
+    facts_con.execute("DELETE FROM restaurants WHERE doc_id = ?", [doc_id])
+    facts_con.execute("DELETE FROM compliance_rules WHERE doc_id = ?", [doc_id])
+    facts_con.execute("DELETE FROM documents WHERE doc_id = ?", [doc_id])
+
+
+def ingest_document(
+    source_path: str,
+    facts_con: duckdb.DuckDBPyConnection,
+    log_con: duckdb.DuckDBPyConnection,
+    structured_extractor=None,
+    vision_fallback=None,
+    node_splitter=None,
+    chunk_embedder=None,
+    qdrant_vs=None,
+    collection_name: str = "menu_index",
+    source_type: str = "menu",
+    skip_embedding: bool = False,
+) -> str:
+    """
+    Full ingestion lifecycle for a single document.
+
+    States: pending → parsing → parsed → extracting → extracted → embedding → indexed → complete
+    On exception: → failed
+
+    Returns the doc_id.
+    """
+    path = Path(source_path)
+    doc_id = sha256_file(path)
+
+    existing = _log_get(log_con, source_path)
+    if existing and existing["doc_id"] == doc_id and existing["status"] == "complete":
+        log.info(f"Skip (already complete): {source_path}")
+        return doc_id
+
+    _log_upsert(log_con, doc_id, source_path, "pending")
+
+    try:
+        # ── 1. Parsing ───────────────────────────────────────────────────
+        _log_set_status(log_con, doc_id, "parsing")
+
+        parsed_text: str = ""
+        parsing_confidence: str = "high"
+
+        if structured_extractor is not None:
+            from src.ingestion.structured_extraction import extract_entities
+            extraction_result = extract_entities(
+                source_path=source_path,
+                source_type=source_type,
+                doc_id=doc_id,
+            )
+            parsing_confidence = extraction_result.get("parsing_confidence", "high")
+
+            if parsing_confidence == "low" and vision_fallback is not None:
+                log.warning(f"Low confidence for {source_path}, switching to vision fallback")
+                from src.ingestion.vision_fallback import parse_with_vision
+                parsed_text = parse_with_vision(source_path)
+                extraction_result = extract_entities(
+                    source_path=source_path,
+                    source_type=source_type,
+                    doc_id=doc_id,
+                    raw_text=parsed_text,
+                )
+
+            # Save parsed output
+            parsed_out = PARSED_DIR / f"{doc_id}.json"
+            import json
+            with open(parsed_out, "w", encoding="utf-8") as f:
+                json.dump(extraction_result, f, ensure_ascii=False, indent=2)
+
+        _log_set_status(log_con, doc_id, "parsed")
+
+        # ── 2. Structured store ──────────────────────────────────────────
+        _log_set_status(log_con, doc_id, "extracting")
+
+        if structured_extractor is not None:
+            from src.ingestion.structured_extraction import write_to_duckdb
+            write_to_duckdb(extraction_result, doc_id, source_path, source_type, facts_con)
+
+        _log_set_status(log_con, doc_id, "extracted")
+
+        # ── 3. Vector index ──────────────────────────────────────────────
+        if not skip_embedding and chunk_embedder is not None and qdrant_vs is not None:
+            _log_set_status(log_con, doc_id, "embedding")
+            # Chunking + embedding is handled by the caller via IngestionPipeline
+            _log_set_status(log_con, doc_id, "indexed")
+
+        _log_set_status(log_con, doc_id, "complete")
+        log.info(f"Ingestion complete: {source_path} ({doc_id})")
+        return doc_id
+
+    except Exception as exc:
+        _log_set_status(log_con, doc_id, "failed", error_message=str(exc))
+        log.error(f"Ingestion failed for {source_path}: {exc}", exc_info=True)
+        raise
+
+
+def update_document(
+    source_path: str,
+    facts_con: duckdb.DuckDBPyConnection,
+    log_con: duckdb.DuckDBPyConnection,
+    **kwargs,
+) -> str:
+    """
+    Update a document: invalidate old artefacts, then re-ingest.
+    Follows the 'invalidate first, insert after' protocol.
+    """
+    path = Path(source_path)
+    new_doc_id = sha256_file(path)
+
+    existing = _log_get(log_con, source_path)
+    if not existing:
+        return ingest_document(source_path, facts_con, log_con, **kwargs)
+    if existing["doc_id"] == new_doc_id:
+        log.info(f"No change detected for {source_path}, skipping update.")
+        return new_doc_id
+
+    old_doc_id = existing["doc_id"]
+    log.info(f"Updating {source_path}: {old_doc_id[:8]}… → {new_doc_id[:8]}…")
+
+    # 1. Purge from vector store
+    try:
+        vs = _get_qdrant_client()
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+        client = vs.get_client()
+        from src.app.config import ALL_COLLECTIONS
+        for col in ALL_COLLECTIONS:
+            client.delete(
+                collection_name=col,
+                points_selector=Filter(
+                    must=[FieldCondition(key="doc_id", match=MatchValue(value=old_doc_id))]
+                ),
+            )
+    except Exception as exc:
+        log.warning(f"Qdrant purge failed for {old_doc_id}: {exc}")
+
+    # 2. Cascade delete from DuckDB
+    _cascade_delete_duckdb(facts_con, old_doc_id)
+
+    # 3. Remove parsed artefact
+    parsed_out = PARSED_DIR / f"{old_doc_id}.json"
+    if parsed_out.exists():
+        parsed_out.unlink()
+
+    # 4. Remove ingestion log entry for old doc_id
+    log_con.execute("DELETE FROM ingestion_log WHERE doc_id = ?", [old_doc_id])
+
+    # 5. Re-ingest
+    return ingest_document(source_path, facts_con, log_con, **kwargs)
+
+
+def delete_document(
+    source_path: str,
+    facts_con: duckdb.DuckDBPyConnection,
+    log_con: duckdb.DuckDBPyConnection,
+) -> None:
+    """
+    Fully remove a document from all stores.
+    """
+    existing = _log_get(log_con, source_path)
+    if not existing:
+        log.info(f"Nothing to delete for {source_path}")
+        return
+
+    doc_id = existing["doc_id"]
+    log.info(f"Deleting {source_path} ({doc_id[:8]}…)")
+
+    # 1. Qdrant
+    try:
+        vs = _get_qdrant_client()
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+        client = vs.get_client()
+        from src.app.config import ALL_COLLECTIONS
+        for col in ALL_COLLECTIONS:
+            client.delete(
+                collection_name=col,
+                points_selector=Filter(
+                    must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+                ),
+            )
+    except Exception as exc:
+        log.warning(f"Qdrant delete failed for {doc_id}: {exc}")
+
+    # 2. DuckDB cascade
+    _cascade_delete_duckdb(facts_con, doc_id)
+
+    # 3. Parsed dir
+    parsed_out = PARSED_DIR / f"{doc_id}.json"
+    if parsed_out.exists():
+        parsed_out.unlink()
+
+    # 4. Ingestion log
+    log_con.execute("DELETE FROM ingestion_log WHERE source_path = ?", [source_path])
+    log.info(f"Deleted {source_path}")
+
+
+def retry_failed(
+    facts_con: duckdb.DuckDBPyConnection,
+    log_con: duckdb.DuckDBPyConnection,
+    **kwargs,
+) -> list[str]:
+    """Re-attempt ingestion for all documents with status='failed'."""
+    rows = log_con.execute(
+        "SELECT source_path FROM ingestion_log WHERE status = 'failed'"
+    ).fetchall()
+    retried = []
+    for (source_path,) in rows:
+        try:
+            ingest_document(source_path, facts_con, log_con, **kwargs)
+            retried.append(source_path)
+        except Exception as exc:
+            log.error(f"Retry failed for {source_path}: {exc}")
+    return retried
+
+
+def health_check(
+    facts_con: duckdb.DuckDBPyConnection,
+    log_con: duckdb.DuckDBPyConnection,
+    **kwargs,
+) -> list[str]:
+    """
+    Check consistency between DuckDB and ingestion_log.
+    Documents marked complete in log but missing from documents table → re-ingest.
+    """
+    log_doc_ids = {
+        row[0]
+        for row in log_con.execute(
+            "SELECT doc_id FROM ingestion_log WHERE status = 'complete'"
+        ).fetchall()
+    }
+    db_doc_ids = {
+        row[0]
+        for row in facts_con.execute("SELECT doc_id FROM documents").fetchall()
+    }
+    orphans_in_log = log_doc_ids - db_doc_ids
+    if orphans_in_log:
+        log.warning(f"Health check: {len(orphans_in_log)} orphan doc_ids in log not in DuckDB")
+
+    # Find source paths for orphans and re-ingest
+    reprocessed = []
+    for doc_id in orphans_in_log:
+        row = log_con.execute(
+            "SELECT source_path FROM ingestion_log WHERE doc_id = ?", [doc_id]
+        ).fetchone()
+        if row:
+            source_path = row[0]
+            log.info(f"Health check: re-ingesting orphan {source_path}")
+            try:
+                update_document(source_path, facts_con, log_con, **kwargs)
+                reprocessed.append(source_path)
+            except Exception as exc:
+                log.error(f"Health check re-ingest failed for {source_path}: {exc}")
+    return reprocessed
+
+
+# ---------------------------------------------------------------------------
 # Main initialisation entry point
 # ---------------------------------------------------------------------------
 

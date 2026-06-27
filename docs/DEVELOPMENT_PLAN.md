@@ -105,8 +105,8 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### 2.3 Scrittura nei due store
 
-- [ ] 🔴 `doc_id` calcolato come `sha256(file_content)` deterministicamente
-- [ ] 🔴 Scrittura in DuckDB (`documents`, `restaurants`, `dishes`, `dish_ingredients`, `dish_techniques`) con FK corrette verso `doc_id`
+- [x] 🔴 `doc_id` calcolato come `sha256(file_content)` deterministicamente
+- [x] 🔴 Scrittura in DuckDB (`documents`, `restaurants`, `dishes`, `dish_ingredients`, `dish_techniques`) con FK corrette verso `doc_id`
 - [ ] 🔴 Chunking del testo parsato via `NodeSplitter` secondo la strategia per tipo di fonte (§8.4):
   - Menu: chunk per piatto/sezione; fallback 700-1200 caratteri
   - Manuale: chunk per sezione/sottosezione con metadata `section_title`, `topic`
@@ -118,17 +118,17 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### 2.4 Ingestion log e ciclo di vita
 
-- [ ] 🔴 Implementare `ingest_document()` con transizione di stato: `pending → parsing → parsed → extracting → extracted → embedding → indexed → complete` (§8.3)
-- [ ] 🔴 In caso di eccezione: stato → `failed`, `error_message` valorizzato
-- [ ] 🔴 Skip automatico se `doc_id` già presente con stato `complete` (hash invariato)
-- [ ] 🔴 Implementare `update_document()`: invalida Qdrant + DuckDB a cascata per il vecchio `doc_id`, poi richiama `ingest_document()`
-- [ ] 🔴 Implementare `delete_document()`: purga Qdrant, delete a cascata in DuckDB, rimozione da `parsed/`, rimozione da `ingestion_log`
-- [ ] 🔴 Health check all'avvio: confronto O(n_documenti) tra `doc_id` in DuckDB e Qdrant; elementi orfani → `update_document()`
+- [x] 🔴 Implementare `ingest_document()` con transizione di stato: `pending → parsing → parsed → extracting → extracted → embedding → indexed → complete` (§8.3)
+- [x] 🔴 In caso di eccezione: stato → `failed`, `error_message` valorizzato
+- [x] 🔴 Skip automatico se `doc_id` già presente con stato `complete` (hash invariato)
+- [x] 🔴 Implementare `update_document()`: invalida Qdrant + DuckDB a cascata per il vecchio `doc_id`, poi richiama `ingest_document()`
+- [x] 🔴 Implementare `delete_document()`: purga Qdrant, delete a cascata in DuckDB, rimozione da `parsed/`, rimozione da `ingestion_log`
+- [x] 🔴 Health check all'avvio: confronto O(n_documenti) tra `doc_id` in DuckDB e Qdrant; elementi orfani → `update_document()`
 - [ ] 🟡 Worker `retry_failed()` che rielabora i record con stato `failed`
 
 ### 2.5 Ingestion dei singoli tipi di fonte
 
-- [ ] 🔴 `src/ingestion/menu_ingestion.py` — tutti i menu PDF
+- [x] 🔴 `src/ingestion/menu_ingestion.py` — tutti i menu PDF
 - [ ] 🔴 `src/ingestion/manual_ingestion.py` — Manuale di Cucina (tecniche, certificazioni, ordini → `technique_taxonomy`)
 - [ ] 🔴 `src/ingestion/code_ingestion.py` — Codice Galattico (limiti quantitativi → `compliance_rules`)
 - [ ] 🔴 `src/ingestion/distances_ingestion.py` — Distanze CSV → `planet_distances` in DuckDB
