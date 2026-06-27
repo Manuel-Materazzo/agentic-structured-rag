@@ -70,7 +70,7 @@ The real question at this stage is: how does a small-sized model suitable for on
 | --- |------|-------|---------|-------|
 | **Easy** | 19   | 25    | 2       | 2     |
 | **Medium** | 3    | 23    | 0       | 2     |
-| **Hard** | 15   | 1     | 1       | 1     |
+| **Hard** | 1   | 15    | 1       | 1     |
 | **Impossible** | 1    | 1     | 1       | 3     |
 
 **Notes:**

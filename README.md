@@ -11,7 +11,7 @@ The knowledge base is almost entirely structured, which makes "relationalize-fir
 
 Most of the example questions contain explicit filters and constraints that map cleanly to SQL, where a pure vector search approach would underperform.
 
-That said, real users rarely stay within the schema you designed for them. The hybrid approach is the natural evolution i picked for the system: when someone asks "Come funziona la Marinatura Sotto Zero a Polarità Inversa?", SQL has nothing to offer, but the vector store does. 
+That said, real users rarely stay within the schema you designed for them. The hybrid approach is the natural evolution I picked for the system: when someone asks "Come funziona la Marinatura Sotto Zero a Polarità Inversa?", SQL has nothing to offer, but the vector store does. 
 
 Keeping both tools available makes the system robust to the long tail of unexpected queries, and keeps the road open for a possible future rationalization.
 
@@ -65,9 +65,9 @@ The entrypoint supports four modes controlled by the `MODE` environment variable
 
 | MODE            | Description                                                                                               |
 |-----------------|-----------------------------------------------------------------------------------------------------------|
-| `api` (default) | Start the FastAPI server on port 8080                                                                     |
+| `api` (default) | Start the FastAPI server on port 8080, Serves the Orchestrator agent.                                     |
 | `ingestion`     | Run the full ingestion pipeline. You can skip this step if you extract the data.zip folder from releases. |
-| `inference`     | Run inference + generate submission + evaluate Jaccard                                                    |
+| `inference`     | Run inference (SQL agent only) + generate submission + evaluate Jaccard                                   |
 | `evaluate`      | Run Jaccard evaluation only on an existing submission                                                     |
 
 ```bash
@@ -81,7 +81,7 @@ docker compose run -e MODE=ingestion agentic-structured-rag
 docker compose run -e MODE=inference agentic-structured-rag
 
 # Run only evaluations
-docker compose run -e MODE=inference agentic-structured-rag
+docker compose run -e MODE=evaluate agentic-structured-rag
 
 # Start API
 docker compose run -e MODE=api agentic-structured-rag
@@ -99,6 +99,7 @@ cd agentic-structured-rag
 uv sync
 
 # or with pip
+pip install -r requirements.txt
 pip install -e .
 ```
 
@@ -183,6 +184,8 @@ python src/evaluation/jaccard_evaluation.py --submission output/submission.csv
 ```
 
 ## 🌍 API usage
+
+You can consult api documentation at `http://localhost:8080/docs`.
 
 ```bash
 # Ask a question
