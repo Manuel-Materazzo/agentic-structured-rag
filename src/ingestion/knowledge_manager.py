@@ -244,7 +244,7 @@ class KnowledgeManager:
             is_local_path = (
                     QDRANT_LOCATION
                     and QDRANT_LOCATION != ":memory:"
-                    and os.path.splitdrive(QDRANT_LOCATION)[0]
+                    and (os.path.splitdrive(QDRANT_LOCATION)[0] or os.path.isabs(QDRANT_LOCATION))
             )
             if is_local_path:
                 vs = QdrantVectorstore.__new__(QdrantVectorstore)
