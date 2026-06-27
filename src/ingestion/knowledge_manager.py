@@ -222,6 +222,13 @@ class KnowledgeManager:
         self._vectorstore = vs
         return vs
 
+    def get_facts_db(self):
+        """Return a cached Duckdb using the configured connection."""
+        if self.facts_con is None:
+            self.facts_con = self._init_facts_db()
+
+        return self.facts_con
+
     # ------------------------------------------------------------------
     # Ingestion-log operations
     # ------------------------------------------------------------------

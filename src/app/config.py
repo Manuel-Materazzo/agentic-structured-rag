@@ -35,6 +35,8 @@ for _d in [RAW_DIR, PARSED_DIR, DATABASE_DIR, CACHE_DIR, OUTPUT_DIR]:
 # ---------------------------------------------------------------------------
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL: str | None = os.getenv("OPENAI_BASE_URL", None) or None
+OPENAI_EMBEDDER_API_KEY: str = os.getenv("OPENAI_EMBEDDER_API_KEY", "")
+OPENAI_EMBEDDER_BASE_URL: str | None = os.getenv("OPENAI_EMBEDDER_BASE_URL", None) or None
 LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-5.4-mini")
 LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.0"))
 LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "4096"))
