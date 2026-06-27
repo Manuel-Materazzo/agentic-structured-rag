@@ -69,20 +69,28 @@ def extract_entities(
             system_prompt=system_prompt,
             temperature=0.0,
         )
-        result = _parse_json_response(response.text)
+        log.info(f"Raw llm response: {response.text}")
+        parsed = parse_json_response(response.text)
+        if not parsed:
+            return {"parsing_confidence": "low", "parsing_issues": "Empty response from LLM"}
+    except json.JSONDecodeError:
+        # If JSON is broken, return low confidence to avoid crashes
+        return {"parsing_confidence": "low", "parsing_issues": "Invalid JSON returned"}
     except Exception as exc:
         log.error("LLM extraction failed for %s: %s", source_path, exc)
         # Raise an exception if it's a connection/API error,
         # so the manager can stop instead of doing the vision fallback.
         raise RuntimeError(f"LLM API Error: {exc}") from exc
 
+    log.info(f"Parsing result: {json.dumps(parsed)}")
+
     # If the LLM responded but said the text is incomprehensible
-    if result.get("parsing_confidence") == "low":
+    if parsed.get("parsing_confidence") == "low":
         log.warning("LLM reported low parsing confidence for %s", source_path)
 
     # Post-process quantities for menus, it's a special case
     if source_type == "menu":
-        result = _postprocess_quantities(result)
+        result = _postprocess_quantities(parsed)
 
     log.info(
         "Extraction complete for %s [confidence=%s]",
@@ -90,6 +98,15 @@ def extract_entities(
         result.get("parsing_confidence", "unknown"),
     )
     return result
+
+
+def parse_json_response(text: str) -> dict[str, Any]:
+    # Clean up residual thinking
+    text = text.split('</thought>').pop()
+    text = text.split('</think>').pop()
+
+    # extract json from markdown code blocks
+    return json_repair.loads(text)
 
 
 # ---------------------------------------------------------------------------
@@ -131,19 +148,8 @@ def _build_extraction_prompt(raw_text: str, source_type: str) -> str:
     return f"{hint}\n\nDOCUMENT TEXT:\n{raw_text[:_MAX_INPUT_CHARS]}"
 
 
-def _parse_json_response(text: str) -> dict[str, Any]:
-    try:
-        parsed = json_repair.loads(text)
-        if not parsed:
-            return {"parsing_confidence": "low", "parsing_issues": "Empty response from LLM"}
-    except json.JSONDecodeError:
-        # If JSON is broken, return low confidence to avoid crashes
-        return {"parsing_confidence": "low", "parsing_issues": "Invalid JSON returned", "raw_text": text}
-
-    return parsed
-
 def _postprocess_quantities(result: dict[str, Any]) -> dict[str, Any]:
-    #TODO: generalize to all quantities
+    # TODO: generalize to all quantities
     for dish in result.get("dishes", []):
         for ingredient in dish.get("ingredients", []):
             qty = ingredient.get("quantity_grams")

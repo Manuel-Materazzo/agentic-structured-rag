@@ -12,9 +12,8 @@ import json
 import logging
 from typing import Any
 
-from json_repair import json_repair
-
 from ingestion.knowledge_manager import KnowledgeManager
+from ingestion.structured_extraction import parse_json_response
 from src.app.config import LLM_MODEL, LLM_TEMPERATURE, OPENAI_API_KEY, OPENAI_BASE_URL
 from src.utils.sql_utils import get_schema_overview, run_sql
 
@@ -145,14 +144,14 @@ class SQLAgent:
         )
 
     def _get_llm_client(self):
-        from datapizza.clients.openai import OpenAIClient
+        from datapizza.clients.openai_like import OpenAILikeClient
 
         if not OPENAI_API_KEY:
             raise RuntimeError(
                 "OPENAI_API_KEY is required for the SQL agent. "
                 "Pass llm_client explicitly in tests or set the environment variable."
             )
-        return OpenAIClient(
+        return OpenAILikeClient(
             api_key=OPENAI_API_KEY,
             base_url=OPENAI_BASE_URL,
             model=LLM_MODEL,
@@ -163,7 +162,7 @@ class SQLAgent:
         text = response_text.strip()
         try:
             # repair json
-            parsed = json_repair.loads(text)
+            parsed = parse_json_response(text)
             if not parsed:
                 raise json.JSONDecodeError("Json repair returned an invalid object.", text, 0)
             # extract data
