@@ -30,6 +30,7 @@ from src.app.config import (
     QDRANT_LOCATION,
     QDRANT_PORT,
 )
+from src.ingestion.shared import delete_qdrant_points_by_doc_id
 
 log = logging.getLogger(__name__)
 
@@ -329,7 +330,7 @@ def ingest_document(
     _log_upsert(log_con, doc_id, source_path, "pending")
 
     try:
-        # ── 1. Parsing ───────────────────────────────────────────────────
+        # 1. Parsing
         _log_set_status(log_con, doc_id, "parsing")
 
         parsed_text: str = ""
@@ -363,7 +364,7 @@ def ingest_document(
 
         _log_set_status(log_con, doc_id, "parsed")
 
-        # ── 2. Structured store ──────────────────────────────────────────
+        # 2. Structured store
         _log_set_status(log_con, doc_id, "extracting")
 
         if structured_extractor is not None:
@@ -372,7 +373,7 @@ def ingest_document(
 
         _log_set_status(log_con, doc_id, "extracted")
 
-        # ── 3. Vector index ──────────────────────────────────────────────
+        # 3. Vector index
         if not skip_embedding and chunk_embedder is not None and qdrant_vs is not None:
             _log_set_status(log_con, doc_id, "embedding")
             # Chunking + embedding is handled by the caller via IngestionPipeline
@@ -414,16 +415,8 @@ def update_document(
     # 1. Purge from vector store
     try:
         vs = _get_qdrant_client()
-        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = vs.get_client()
-        from src.app.config import ALL_COLLECTIONS
-        for col in ALL_COLLECTIONS:
-            client.delete(
-                collection_name=col,
-                points_selector=Filter(
-                    must=[FieldCondition(key="doc_id", match=MatchValue(value=old_doc_id))]
-                ),
-            )
+        delete_qdrant_points_by_doc_id(client, ALL_COLLECTIONS, old_doc_id)
     except Exception as exc:
         log.warning(f"Qdrant purge failed for {old_doc_id}: {exc}")
 
@@ -461,16 +454,8 @@ def delete_document(
     # 1. Qdrant
     try:
         vs = _get_qdrant_client()
-        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = vs.get_client()
-        from src.app.config import ALL_COLLECTIONS
-        for col in ALL_COLLECTIONS:
-            client.delete(
-                collection_name=col,
-                points_selector=Filter(
-                    must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
-                ),
-            )
+        delete_qdrant_points_by_doc_id(client, ALL_COLLECTIONS, doc_id)
     except Exception as exc:
         log.warning(f"Qdrant delete failed for {doc_id}: {exc}")
 

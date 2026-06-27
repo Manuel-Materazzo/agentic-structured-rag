@@ -9,7 +9,6 @@ and indexes chunks in the menu_index Qdrant collection.
 from __future__ import annotations
 
 import logging
-import uuid
 from pathlib import Path
 
 import duckdb
@@ -29,6 +28,7 @@ from src.ingestion.runner import (
     _log_upsert,
     sha256_file,
 )
+from src.ingestion.shared import build_payload
 from src.ingestion.structured_extraction import extract_entities, write_to_duckdb
 
 log = logging.getLogger(__name__)
@@ -57,31 +57,6 @@ def _build_ingestion_pipeline(vs, collection_name: str):
         collection_name=collection_name,
     )
     return pipeline
-
-
-def _enrich_chunk_metadata(
-    chunks,
-    doc_id: str,
-    source_path: str,
-    restaurant_name: str,
-) -> list:
-    """
-    Add the Qdrant payload contract fields to each chunk:
-    chunk_id, doc_id, source_path, source_type, restaurant, etc.
-    """
-    enriched = []
-    for chunk in chunks:
-        if not hasattr(chunk, "metadata") or chunk.metadata is None:
-            chunk.metadata = {}
-        chunk.metadata.update({
-            "chunk_id": str(uuid.uuid4()),
-            "doc_id": doc_id,
-            "source_path": source_path,
-            "source_type": "menu",
-            "restaurant": restaurant_name,
-        })
-        enriched.append(chunk)
-    return enriched
 
 
 def ingest_menu(
@@ -153,11 +128,13 @@ def ingest_menu(
         pipeline.run(
             file_path=source_path,
             metadata={
-                "chunk_id_fn": lambda: str(uuid.uuid4()),
-                "doc_id": doc_id,
-                "source_path": source_path,
-                "source_type": "menu",
-                "restaurant": restaurant_name,
+                **build_payload(
+                    doc_id=doc_id,
+                    source_path=source_path,
+                    source_type="menu",
+                    text="",
+                    restaurant=restaurant_name,
+                ),
             },
         )
         _log_set_status(log_con, doc_id, "indexed")
