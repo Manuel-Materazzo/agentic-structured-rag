@@ -4,6 +4,7 @@ normalizer_utils.py — Normalize raw answer strings before dish ID mapping.
 
 from __future__ import annotations
 
+import difflib
 import re
 import unicodedata
 from difflib import get_close_matches
@@ -32,8 +33,8 @@ def normalize_answers(values: list[str]) -> list[str]:
 
 
 def map_dish_names_to_ids(
-    names: list[str],
-    allow_fuzzy: bool = True,
+        names: list[str],
+        allow_fuzzy: bool = True,
 ) -> list[int]:
     """Map dish names to IDs using the curated mapping file."""
     mapping = get_dish_mapping()
@@ -51,3 +52,41 @@ def map_dish_names_to_ids(
             ids.append(mapping[matches[0]])
     return sorted(set(ids))
 
+
+def extract_dish_from_row(row: tuple, dish_mappings: dict[str, int], cutoff: float = 0.6) -> tuple[str, int] | None:
+    """Extract the best matching dish name and ID from a row of cells.
+
+    Args:
+        row: A tuple of cells to search for dish names.
+        dish_mappings: Dictionary mapping dish names to IDs.
+        cutoff: Minimum similarity score threshold for matches.
+
+    Returns:
+        A tuple of (dish_name, dish_id) if a match is found, otherwise None.
+    """
+    best_name, best_score = None, 0.0
+
+    for cell in row:
+        cell_str = str(cell)
+        matches = difflib.get_close_matches(cell_str, dish_mappings.keys(), n=1, cutoff=cutoff)
+        if matches:
+            score = difflib.SequenceMatcher(None, cell_str, matches[0]).ratio()
+            if score > best_score:
+                best_score, best_name = score, matches[0]
+
+    if best_name is None:
+        return None
+    return best_name, dish_mappings[best_name]
+
+
+def extract_dishes_from_rows(rows: list[tuple], dish_mappings: dict[str, int]) -> list[tuple[str, int] | None]:
+    """Extract dish names and IDs from multiple rows of cells.
+
+    Args:
+        rows: List of tuples, where each tuple represents a row of cells.
+        dish_mappings: Dictionary mapping dish names to IDs.
+
+    Returns:
+        List of tuples (dish_name, dish_id) or None for each row.
+    """
+    return [extract_dish_from_row(row, dish_mappings) for row in rows]
