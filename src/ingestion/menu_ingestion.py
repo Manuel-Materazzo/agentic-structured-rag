@@ -117,7 +117,16 @@ def ingest_menu(
         )
 
         # Vision fallback if confidence is low
-        # TODO: implement
+        if extraction_result.get("parsing_confidence") == "low":
+            log.warning(f"Low parsing confidence for {pdf_path.name}, activating vision fallback")
+            from src.ingestion.vision_fallback import parse_with_vision
+            vision_text = parse_with_vision(source_path)
+            extraction_result = extract_entities(
+                source_path=source_path,
+                source_type="menu",
+                doc_id=doc_id,
+                raw_text=vision_text,
+            )
 
         # Save parsed JSON
         import json

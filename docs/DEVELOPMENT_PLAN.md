@@ -91,7 +91,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 - [x] 🔴 `src/ingestion/menu_ingestion.py` — usa `DoclingParser` per parsare ogni menu PDF; salva output in `data/parsed/`
 - [x] 🔴 Richiesta LLM di entity extraction restituisce obbligatoriamente il campo `parsing_confidence` (`"high"` / `"low"`) e `parsing_issues`
-- [ ] 🔴 `src/ingestion/vision_fallback.py` — se `parsing_confidence == "low"`, rilancia il documento in modalità vision e ripete l'extraction con lo stesso prompt
+- [x] 🔴 `src/ingestion/vision_fallback.py` — se `parsing_confidence == "low"`, rilancia il documento in modalità vision e ripete l'extraction con lo stesso prompt
 - [ ] 🟡 Definire la soglia esatta di "low": il LLM deve dichiarare "non sono riuscito a estrarre entità coerenti", non semplicemente "il testo era disordinato"
 
 ### 2.2 Entity extraction LLM
