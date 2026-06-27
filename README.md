@@ -61,6 +61,10 @@ question categories. There is still room for both improvement and use of smaller
 
 ## 🐋 Docker Quick start
 
+A prebuilt image is available at `ghcr.io/manuel-materazzo/agentic-structured-rag:latest`, docker compose already includes it by default.
+
+**Important:** The Docker Compose includes relative mounts for `data`, `Dataset` and `output`. You can skip ingestion if you extract the `data.zip` folder from releases there.
+
 The entrypoint supports four modes controlled by the `MODE` environment variable:
 
 | MODE            | Description                                                                                               |

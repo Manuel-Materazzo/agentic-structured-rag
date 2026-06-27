@@ -1,7 +1,7 @@
 services:
   agentic-structured-rag:
     container_name: agentic-structured-rag
-    image: agentic-structured-rag
+    image: ghcr.io/manuel-materazzo/agentic-structured-rag:latest
     environment:
       MODE: api # Valid modes: ingestion | api | inference | evaluate
       OPENAI_API_KEY: fake-key
