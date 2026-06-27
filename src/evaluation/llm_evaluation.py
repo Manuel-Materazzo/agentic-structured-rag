@@ -54,7 +54,7 @@ CRITICAL RULES:
         writer = csv.writer(out_f)
         writer.writerow([
             "row_id", "difficoltà", "domanda", "ground_truth_text",
-            "predicted_text", "sql", "evaluation", "reason"
+            "predicted_text", "predicted_sql", "evaluation", "reason"
         ])
 
         with open(INPUT_CSV, mode='r', encoding='utf-8') as in_f:
@@ -65,7 +65,7 @@ CRITICAL RULES:
                 domanda = row.get("domanda", "")
                 gt_text = row.get("ground_truth_text", "")
                 pred_text = row.get("predicted_text", "")
-                sql = row.get("sql", "")
+                sql = row.get("predicted_sql", "")
 
                 log.info(f"[{idx}] Evaluating row_id {row_id}...")
 
