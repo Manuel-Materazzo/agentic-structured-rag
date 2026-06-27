@@ -72,8 +72,8 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### Mapping piatti
 
-- [ ] 🔴 `src/app/submission.py` — carica `Dataset/ground_truth/dish_mapping.json` in memoria all'avvio
-- [ ] 🔴 Funzione `export_empty_submission()` — genera un CSV `output/submission.csv` con `row_id` vuoti per tutte le 100 domande (verifica del formato richiesto)
+- [x] 🔴 `src/app/submission.py` — carica `Dataset/ground_truth/dish_mapping.json` in memoria all'avvio
+- [x] 🔴 Funzione `export_empty_submission()` — genera un CSV `output/submission.csv` con `row_id` vuoti per tutte le 100 domande (verifica del formato richiesto)
 
 ### Criteri di accettazione Fase 1
 
