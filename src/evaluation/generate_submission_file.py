@@ -20,6 +20,7 @@ from src.app.config import (
     DOMANDE_CSV_PATH,
     SUBMISSION_CSV_PATH,
 )
+from src.utils.argparser_utils import get_submission_parser
 
 log = logging.getLogger(__name__)
 
@@ -89,8 +90,8 @@ def load_questions(path: Path = DOMANDE_CSV_PATH) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def export_empty_submission(
-    output_path: Path = SUBMISSION_CSV_PATH,
-    questions_path: Path = DOMANDE_CSV_PATH,
+        output_path: Path = SUBMISSION_CSV_PATH,
+        questions_path: Path = DOMANDE_CSV_PATH,
 ) -> Path:
     """
     Generate an empty submission CSV with all row_ids present but result=''.
@@ -114,9 +115,9 @@ def export_empty_submission(
 
 
 def export_submission(
-    answers: dict[int, list[int]],
-    output_path: Path = SUBMISSION_CSV_PATH,
-    questions_path: Path = DOMANDE_CSV_PATH,
+        answers: dict[int, list[int]],
+        output_path: Path = SUBMISSION_CSV_PATH,
+        questions_path: Path = DOMANDE_CSV_PATH,
 ) -> Path:
     """
     Export the final submission CSV.
@@ -144,7 +145,7 @@ def export_submission(
 
     submission = pd.DataFrame(rows)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    submission.to_csv(output_path, index=False)
+    submission.to_csv(output_path, index=False, na_rep="")
     log.info(f"Exported submission ({len(submission)} rows) → {output_path}")
     return output_path
 
@@ -152,14 +153,43 @@ def export_submission(
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
+def main():
     logging.basicConfig(level=logging.INFO)
+
+    # Set up argument parser
+    parser = get_submission_parser()
+    args = parser.parse_args()
+
+    # Load basic mappings
     load_dish_mapping()
-    out = export_empty_submission()
-    print(f"✅ Empty submission written to {out}")
-    # Verify format
-    df = pd.read_csv(out)
+
+    # Conditional execution based on answers_path
+    if args.answers_path:
+        logging.info(f"Loading answers from {args.answers_path}...")
+        # Load CSV file
+        answers_df = pd.read_csv(args.answers_path)
+
+        # Group answers into a list.
+        content: dict[int, list[int]] = (
+            answers_df.dropna(subset=["predicted_ids"])
+            .groupby("row_id")["predicted_ids"]
+            .apply(list)
+            .to_dict()
+        )
+
+        out_file = export_submission(content)
+        print(f"✅ Submission written to {out_file}")
+    else:
+        logging.info("No answers_path provided. Generating empty submission...")
+        out_file = export_empty_submission()
+        print(f"✅ Empty submission written to {out_file}")
+
+    # Verify format using the provided output_path
+    df = pd.read_csv(out_file)
     assert list(df.columns) == ["row_id", "result"], "Unexpected columns"
     assert len(df) == 100, f"Expected 100 rows, got {len(df)}"
     print(f"   Rows: {len(df)}, Columns: {list(df.columns)}")
+
+
+if __name__ == "__main__":
+    main()
