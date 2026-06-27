@@ -24,7 +24,7 @@ CODE_DIR: Path = KB_DIR / "codice_galattico"
 
 # TODO: extract to config
 # TODO: Replace manual JSON schema declaration with a Pydantic model.
-SYSTEM_PROMPT = """You are a structured entity extractor for a regulatory compliance document (Codice Galattico).
+SYSTEM_PROMPT = """You are a structured entity extractor for a fictionary regulatory compliance document (Codice Galattico).
 
 Extract ALL compliance rules regarding ingredient limits or technique license requirements. Return a JSON object with this EXACT schema:
 

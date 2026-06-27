@@ -24,7 +24,7 @@ MENU_DIR: Path = KB_DIR / "menu"
 
 # TODO: extract to config
 # TODO: Replace manual JSON schema declaration with a Pydantic model.
-SYSTEM_PROMPT = """You are a structured entity extractor for a restaurant menu database.
+SYSTEM_PROMPT = """You are a structured entity extractor for a fictionary restaurant menu database.
 
 Extract ALL dishes from the provided menu text and return a JSON object with this EXACT schema:
 
@@ -57,7 +57,7 @@ Extract ALL dishes from the provided menu text and return a JSON object with thi
 CRITICAL RULES:
 - quantity_grams: FLOAT with decimal point (e.g. 200.0) or null. NEVER use 0.0 for "as much as needed", "to taste", "traces", or unquantifiable amounts.
 - quantity_raw: ALWAYS populate with the original text (e.g. "200g", "as much as needed", "3 leaves").
-- parsing_confidence: Use "low" ONLY if you could NOT extract coherent entity structure. NOT just because the text was messy.
+- parsing_confidence: Use "low" ONLY if you could NOT extract coherent entity structure. NOT just because the text was messy or sounds fictional.
 - Output ONLY the JSON object. No additional text, markdown, or explanation.
 """
 
@@ -156,6 +156,12 @@ class MenuIngestor(BaseIngestor):
             for ing in dish.get("ingredients", []):
                 ing_name = (ing.get("name") or "").strip()
                 if not ing_name: continue
+
+                # Force quantity_raw to empty string if None or missing
+                qty_raw = ing.get("quantity_raw")
+                if not qty_raw:
+                    qty_raw = ""
+
                 try:
                     facts_con.execute(
                         """
@@ -164,7 +170,7 @@ class MenuIngestor(BaseIngestor):
                         VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT (dish_id, ingredient) DO NOTHING
                         """,
-                        [dish_id, ing_name, ing.get("quantity_grams"), ing.get("quantity_raw", ""), False],
+                        [dish_id, ing_name, ing.get("quantity_grams"), qty_raw, False],
                     )
                 except Exception as exc:
                     log.warning("Failed to insert ingredient '%s': %s", ing_name, exc)
