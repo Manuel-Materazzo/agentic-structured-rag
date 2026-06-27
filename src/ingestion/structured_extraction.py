@@ -149,10 +149,14 @@ def _parse_document(source_path: str, source_type: str) -> str:
 
 def _get_llm_client(model: str):
     """Create an OpenAI client using environment variables."""
-    import os
     from datapizza.clients.openai import OpenAIClient
-    # TODO: get from config
-    return OpenAIClient(api_key=os.environ.get("OPENAI_API_KEY", ""), model=model)
+    from src.app.config import OPENAI_BASE_URL, OPENAI_API_KEY
+
+    return OpenAIClient(
+        api_key=OPENAI_API_KEY,
+        base_url=OPENAI_BASE_URL,
+        model=model,
+    )
 
 
 def _build_extraction_prompt(raw_text: str, source_type: str) -> str:

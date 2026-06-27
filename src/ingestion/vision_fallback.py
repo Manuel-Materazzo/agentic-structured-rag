@@ -70,13 +70,16 @@ def _parse_with_llm_vision(source_path: str) -> str:
     Requires pypdfium2 (already installed via docling deps).
     """
     import base64
-    import os
     import io
 
     import pypdfium2 as pdfium
     from openai import OpenAI
+    from src.app.config import OPENAI_BASE_URL, OPENAI_API_KEY
 
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+    client = OpenAI(
+        api_key=OPENAI_API_KEY,
+        base_url=OPENAI_BASE_URL,
+    )
     path = Path(source_path)
 
     pdf = pdfium.PdfDocument(str(path))
