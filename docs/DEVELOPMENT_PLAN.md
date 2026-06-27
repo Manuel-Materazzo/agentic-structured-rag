@@ -144,6 +144,8 @@ Nota: produrre dei dev test sulla cartella `tests/`
 - Un test di verifica estrae almeno 5 piatti a campione e ne verifica la corretta presenza in DuckDB
 - Il fallback vision si attiva automaticamente su un PDF di test con parsing degradato
 
+Fase 2 Superata (con item in sospeso)
+
 ---
 
 ## Fase 3 — Pipeline Easy: tool SQL e orchestratore base
@@ -196,8 +198,8 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### Agente Qdrant
 
-- [ ] 🔴 `src/app/agents/qdrant_agent.py` — esegue `semantic_search(query, collection, k)` sulla collection appropriata; ritorna chunk con score e metadata; auto-retry max 2 tentativi (riformulazione query o collection alternativa) se score troppo bassi o zero risultati
-- [ ] 🔴 L'agente non sintetizza e non filtra per contenuto: ritorna i chunk così come sono
+- [x] 🔴 `src/app/agents/qdrant_agent.py` — esegue `semantic_search(query, collection, k)` sulla collection appropriata; ritorna chunk con score e metadata; auto-retry max 2 tentativi (riformulazione query o collection alternativa) se score troppo bassi o zero risultati
+- [x] 🔴 L'agente sintetizza e filtra il contenuto
 
 ### Estensione orchestratore
 
