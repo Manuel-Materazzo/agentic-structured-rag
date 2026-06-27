@@ -83,8 +83,14 @@ CREATE TABLE IF NOT EXISTS dish_techniques (
 
 CREATE TABLE IF NOT EXISTS technique_taxonomy (
     technique              TEXT PRIMARY KEY,
-    macro_category         TEXT NOT NULL,
-    required_license_level TEXT
+    macro_category         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS technique_licenses (
+    technique     TEXT REFERENCES technique_taxonomy(technique),
+    license_type  TEXT NOT NULL,
+    license_grade INTEGER NOT NULL,
+    PRIMARY KEY (technique, license_type, license_grade)
 );
 
 CREATE TABLE IF NOT EXISTS planet_distances (
