@@ -30,14 +30,15 @@ def parse_with_vision(source_path: str) -> str:
     """
     log.info(f"[vision_fallback] Starting vision parse for: {source_path}")
 
-    # Strategy 1: DoclingParser with OCR
-    try:
-        text = _parse_with_docling_ocr(source_path)
-        if text and len(text.strip()) > 50:
-            log.info(f"[vision_fallback] OCR parse succeeded for {source_path}")
-            return text
-    except Exception as exc:
-        log.warning(f"[vision_fallback] DoclingParser OCR failed: {exc}")
+    # Strategy 1: DoclingParser with OCR, Disabled, as it's the way already used by ingestion
+    # TODO: replace with a specialized OCR model (e.g. mistral OCR)
+    # try:
+    #     text = _parse_with_docling_ocr(source_path)
+    #     if text and len(text.strip()) > 50:
+    #         log.info(f"[vision_fallback] OCR parse succeeded for {source_path}")
+    #         return text
+    # except Exception as exc:
+    #     log.warning(f"[vision_fallback] DoclingParser OCR failed: {exc}")
 
     # Strategy 2: LLM vision (page images)
     try:

@@ -242,7 +242,7 @@ class BaseIngestor(ABC):
                     raw_text=raw_text,
                 )
 
-                if self.use_vision_fallback and extraction_result.get("parsing_confidence") == "low":
+                if self.use_vision_fallback and (extraction_result.get("parsing_confidence") or "") == "low":
                     log.warning("Low confidence for %s, switching to vision fallback", source_path)
                     extraction_result = self._run_vision_fallback(source_path, doc_id, extraction_result)
 

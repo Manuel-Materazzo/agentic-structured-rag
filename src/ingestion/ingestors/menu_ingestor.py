@@ -35,7 +35,7 @@ CRITICAL RULES:
 - quantity_grams: FLOAT with decimal point (e.g. 200.0) or null. NEVER use 0.0 for "as much as needed", "to taste", "traces", or unquantifiable amounts.
 - quantity_raw: ALWAYS populate with the original text (e.g. "200g", "as much as needed", "3 leaves").
 - Pay attention to the license grade, it could be written in roman numerals, you MUST convert it (e.g. I -> 1, II -> 2, III -> 3, etc.).
-- Deduce licenses if the name doesn't match perfectly.
+- Deduce licenses if the name doesn't match perfectly. When a License is in a list or a table, but has no reported level, assume level 1.
 - parsing_confidence: Use "low" ONLY if you could NOT extract coherent entity structure. NOT just because the text was messy or sounds fictional.
 - Output ONLY the JSON object. No additional text, markdown, or explanation.
 """
@@ -92,7 +92,7 @@ class MenuIngestor(BaseIngestor):
                          facts_con: duckdb.DuckDBPyConnection) -> None:
         """Write extracted menu data to DuckDB tables."""
         rest_data = extraction_result.get("restaurant", {})
-        rest_name = rest_data.get("name").lower() or "unknown"
+        rest_name = (rest_data.get("name") or "unkown").lower()
 
         existing_rest = facts_con.execute(
             "SELECT id FROM restaurants WHERE doc_id = ? AND name = ?",
@@ -105,23 +105,28 @@ class MenuIngestor(BaseIngestor):
         else:
             rest_id = facts_con.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM restaurants").fetchone()[0]
             # Lowercase data for normalization
-            lowercase_professiona_orders = [x.lower() for x in rest_data.get("professional_orders", [])]
+            lowercase_professiona_orders = [x.lower() for x in rest_data.get("professional_orders", []) or []]
             facts_con.execute(
                 """
                 INSERT INTO restaurants
                     (id, name, chef, planet, professional_orders, doc_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    rest_id, rest_name, rest_data.get("chef", "").lower(), rest_data.get("planet", "").lower(), lowercase_professiona_orders, doc_id,
+                    rest_id,
+                    rest_name,
+                    (rest_data.get("chef") or "").lower(),
+                    (rest_data.get("planet") or "").lower(),
+                    lowercase_professiona_orders,
+                    doc_id,
                 ],
             )
 
         # Insert licenses
-        for license in extraction_result.get("licenses", []):
+        for license in extraction_result.get("licenses", []) or []:
             # Lowercase data for normalization
-            license_type = license.get("license_type").lower()
-            license_grade = license.get("license_grade").lower()
+            license_type = (license.get("license_type") or "").lower()
+            license_grade = (license.get("license_grade") or 0)
             facts_con.execute(
                 """
                 INSERT INTO chef_licenses (restaurant_id, license_type, license_grade)
@@ -131,7 +136,7 @@ class MenuIngestor(BaseIngestor):
             )
 
         # Insert dishes
-        for dish in extraction_result.get("dishes", []):
+        for dish in extraction_result.get("dishes", []) or []:
             # Lowercase for normalization
             dish_name = (dish.get("name") or "").strip().lower()
             if not dish_name:
@@ -151,18 +156,18 @@ class MenuIngestor(BaseIngestor):
                     INSERT INTO dishes (id, name, restaurant_id, preparation_notes, doc_id)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    [dish_id, dish_name, rest_id, dish.get("preparation_notes", "").lower(), doc_id],
+                    [dish_id, dish_name, rest_id, (dish.get("preparation_notes") or "").lower(), doc_id],
                 )
 
             # Insert dish ingredients
-            for ing in dish.get("ingredients", []):
+            for ing in dish.get("ingredients", []) or []:
                 # Lowercase for normalization
                 ing_name = (ing.get("name") or "").strip().lower()
                 if not ing_name:
                     continue
 
                 # Force quantity_raw to empty string if None or missing
-                qty_raw = ing.get("quantity_raw")
+                qty_raw = ing.get("quantity_raw") or ""
                 if not qty_raw:
                     qty_raw = ""
 
@@ -174,13 +179,13 @@ class MenuIngestor(BaseIngestor):
                         VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT (dish_id, ingredient) DO NOTHING
                         """,
-                        [dish_id, ing_name, ing.get("quantity_grams"), qty_raw.lower(), False],
+                        [dish_id, ing_name, ing.get("quantity_grams", None), qty_raw.lower(), False],
                     )
                 except Exception as exc:
                     log.warning("Failed to insert ingredient '%s': %s", ing_name, exc)
 
             # Insert dish techniques
-            for tech in dish.get("techniques", []):
+            for tech in dish.get("techniques", []) or []:
                 tech_name = tech.strip() if isinstance(tech, str) else str(tech)
                 if not tech_name:
                     continue

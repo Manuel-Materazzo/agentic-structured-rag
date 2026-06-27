@@ -129,8 +129,8 @@ class BlogIngestor(BaseIngestor):
         However, we can log any matches with known restaurants for debugging.
         """
         rest_data = extraction_result.get("restaurant", {})
-        if rest_data and rest_data.get("name"):
-            log.info("Blog %s references restaurant: %s", doc_id[:8], rest_data.get("name"))
+        if rest_data and (rest_data.get("name") or "unknown"):
+            log.info("Blog %s references restaurant: %s", doc_id[:8], (rest_data.get("name") or ""))
         # TODO: No relational table writes for blogs in this MVP.
         pass
 

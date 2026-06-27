@@ -131,10 +131,10 @@ class CookManualIngestor(BaseIngestor):
     def write_db_entries(self, extraction_result: dict[str, Any], doc_id: str,
                          facts_con: duckdb.DuckDBPyConnection) -> None:
         """Write extracted techniques to the technique_taxonomy and technique_licenses tables."""
-        techniques = extraction_result.get("techniques", [])
+        techniques = extraction_result.get("techniques", []) or []
         for tech in techniques:
-            name = tech.get("name", "").lower()
-            macro_category = tech.get("macro_category", "").lower()
+            name = (tech.get("name") or "").lower()
+            macro_category = (tech.get("macro_category") or "").lower()
 
             if not name or not macro_category:
                 log.warning("Skipping incomplete technique: %s", tech)
@@ -150,9 +150,9 @@ class CookManualIngestor(BaseIngestor):
                 [name, macro_category],
             )
 
-            for lic in tech.get("licenses", []):
-                license_type = lic.get("license_type", "").lower()
-                license_grade = lic.get("license_grade")
+            for lic in tech.get("licenses", []) or []:
+                license_type = (lic.get("license_type") or "").lower()
+                license_grade = (lic.get("license_grade") or 0)
 
                 if not license_type or license_grade is None:
                     log.warning("Skipping incomplete license for technique '%s': %s", name, lic)
