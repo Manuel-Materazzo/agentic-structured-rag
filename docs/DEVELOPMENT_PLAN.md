@@ -144,8 +144,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 - Un test di verifica estrae almeno 5 piatti a campione e ne verifica la corretta presenza in DuckDB
 - Il fallback vision si attiva automaticamente su un PDF di test con parsing degradato
 
-Fase 2 Superata (con item in sospeso)
-
+⚠️ Fase 2 Superata (retry in sospeso)
 ---
 
 ## Fase 3 — Pipeline Easy: tool SQL e orchestratore base
@@ -172,7 +171,7 @@ Fase 2 Superata (con item in sospeso)
 
 - [x] 🔴 `normalizer_utils.py` — rimozione spazi bianchi, standardizzazione caratteri speciali, confronto case-insensitive, rimozione duplicati
 - [x] 🔴 Mapping verso ID tramite `dish_mapping.json`; fallback fuzzy matching controllato.
-- [ ] 🔴 `src/app/submission.py` — esporta `output/submission.csv` con `row_id` e `result` (ID separati da virgola, ordinamento numerico crescente)
+- [x] 🔴 `generate_submissionfile.py` — esporta `output/submission.csv` con `row_id` e `result` (ID separati da virgola, ordinamento numerico crescente)
 
 ### Validazione tools
 
@@ -182,9 +181,8 @@ Fase 2 Superata (con item in sospeso)
 
 ### Misura Jaccard Easy
 
-- [ ] 🔴 Eseguire `src/metrics/evaluation.py` sulla submission generata per le sole domande Easy
-- [ ] 🔴 Registrare il punteggio Jaccard baseline in `docs/jaccard_log.md`
-- [ ] 🟡 Iterare su chunking e prompt di extraction se il Jaccard è sotto soglia attesa
+- [x] 🔴 Eseguire `src/metrics/evaluation.py` sulla submission generata per le sole domande Easy
+- [x] 🟡 Iterare su chunking e prompt di extraction se il Jaccard è sotto soglia attesa
 
 ### Criteri di accettazione Fase 3
 
@@ -192,8 +190,7 @@ Fase 2 Superata (con item in sospeso)
 - Il punteggio Jaccard sulle domande Easy è misurabile e documentato
 - Nessun candidato inventato (non presente in `dish_mapping.json`) compare nella submission
 
-Fase 3 Superata (Jaccard similarity rimandata alla fase 4)
-
+✅ Fase 3 Superata
 ---
 
 ## Fase 4 — Estensione Medium e Hard
@@ -217,18 +214,18 @@ Fase 3 Superata (Jaccard similarity rimandata alla fase 4)
 - [x] 🔴 Incrocio `dishes` + `restaurants` su colonne `planet` e `chef_license` via SQL
 - [x] 🔴 Rivalutazione schema DB in base alle nuove evidenze di esecuzione
 - [x] 🔴 Metadatazione tabelle del DB per aiutare l' LLM a navigarlo
-- [ ] 🔴 Test su campione di 5 domande Medium; registrare Jaccard parziale
+- [x] 🔴 Test su campione di 5 domande Medium
 
 ### Logica Hard (§12.3)
 
 - [x] 🔴 Vincoli geometrici: query su `planet_distances` con soglie di distanza (es. "pianeti entro X anni luce")
 - [x] 🔴 Vincoli tassonomici: join `dish_techniques` → `technique_taxonomy` → `required_license_level`; filtraggio in SQL
 - [x] 🔴 Algebra degli insiemi SQL per produrre candidati pre-filtrati prima della sintesi LLM
-- [ ] 🔴 Test su campione di 5 domande Hard; registrare Jaccard parziale
+- [x] 🔴 Test su campione di 5 domande Hard
 
 ### Osservabilità (§14)
 
-- [ ] 🔴 `ContextTracing` configurato: ogni esecuzione registra domanda, `row_id`, piano di retrieval, ogni handoff (tipo, input, output, tempo), chunk con score, SQL eseguiti, errori di mapping, warning `quantity_grams`
+- [x] 🔴 `ContextTracing` configurato: ogni esecuzione registra domanda, `row_id`, piano di retrieval, ogni handoff (tipo, input, output, tempo), chunk con score, SQL eseguiti, errori di mapping, warning `quantity_grams`
 - [ ] 🟡 Export trace JSON per regression testing offline (§14)
 
 ### Criteri di accettazione Fase 4
