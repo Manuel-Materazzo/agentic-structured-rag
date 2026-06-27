@@ -263,6 +263,15 @@ CREATE TABLE compliance_rules (
     scope            TEXT,           -- contesto della norma (es. 'per piatto')
     doc_id           TEXT REFERENCES documents(doc_id)
 );
+
+-- Metadati di arricchimento per l'agente SQL
+CREATE TABLE IF NOT EXISTS schema_meta (
+    table_name  TEXT NOT NULL,
+    column_name TEXT,           -- NULL means the annotation is for the whole table
+    visible     BOOLEAN NOT NULL DEFAULT TRUE,
+    description TEXT,
+    PRIMARY KEY (table_name, column_name)
+);
 ```
 
 Ogni tabella relazionale mantiene la colonna `doc_id` come foreign key verso la tabella `documents` per abilitare la tracciabilità della provenienza dei dati e la gestione coordinata del ciclo di vita.

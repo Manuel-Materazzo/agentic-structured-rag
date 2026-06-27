@@ -214,15 +214,16 @@ Fase 3 Superata (Jaccard similarity rimandata alla fase 4)
 
 ### Logica Medium (§12.2)
 
-- [ ] 🔴 Incrocio `dishes` + `restaurants` su colonne `planet` e `chef_license` via SQL
-- [ ] 🔴 Rivalutazione schema DB in base alle nuove evidenze di esecuzione
+- [x] 🔴 Incrocio `dishes` + `restaurants` su colonne `planet` e `chef_license` via SQL
+- [x] 🔴 Rivalutazione schema DB in base alle nuove evidenze di esecuzione
+- [x] 🔴 Metadatazione tabelle del DB per aiutare l' LLM a navigarlo
 - [ ] 🔴 Test su campione di 5 domande Medium; registrare Jaccard parziale
 
 ### Logica Hard (§12.3)
 
-- [ ] 🔴 Vincoli geometrici: query su `planet_distances` con soglie di distanza (es. "pianeti entro X anni luce")
-- [ ] 🔴 Vincoli tassonomici: join `dish_techniques` → `technique_taxonomy` → `required_license_level`; filtraggio in SQL
-- [ ] 🔴 Algebra degli insiemi SQL per produrre candidati pre-filtrati prima della sintesi LLM
+- [x] 🔴 Vincoli geometrici: query su `planet_distances` con soglie di distanza (es. "pianeti entro X anni luce")
+- [x] 🔴 Vincoli tassonomici: join `dish_techniques` → `technique_taxonomy` → `required_license_level`; filtraggio in SQL
+- [x] 🔴 Algebra degli insiemi SQL per produrre candidati pre-filtrati prima della sintesi LLM
 - [ ] 🔴 Test su campione di 5 domande Hard; registrare Jaccard parziale
 
 ### Osservabilità (§14)
