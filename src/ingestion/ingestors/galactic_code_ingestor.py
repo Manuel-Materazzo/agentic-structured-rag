@@ -143,7 +143,7 @@ class GalacticCodeIngestor(BaseIngestor):
                 log.warning("Skipping incomplete compliance rule: %s", rule)
                 continue
 
-            rule_id = facts_con.execute("SELECT nextval('compliance_rules_id_seq')").fetchone()[0]
+            rule_id = facts_con.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM compliance_rules").fetchone()[0]
             facts_con.execute(
                 """
                 INSERT INTO compliance_rules

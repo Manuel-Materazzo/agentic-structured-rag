@@ -220,7 +220,7 @@ class BaseIngestor(ABC):
                 log.error("LLM API error for %s. Skipping. %s", source_path, exc)
                 ingestion_manager.km.log_set_status(doc_id, "failed", str(exc))
             except Exception as exc:
-                log.error("Failed to extract/write %s: %s", source_path, exc)
+                log.exception("Failed to extract/write %s: %s", source_path, exc)
                 ingestion_manager.km.log_set_status(doc_id, "failed", str(exc))
 
         return extracted_docs

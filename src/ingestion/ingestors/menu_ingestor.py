@@ -123,7 +123,7 @@ class MenuIngestor(BaseIngestor):
         if existing_rest:
             rest_id = existing_rest[0]
         else:
-            rest_id = facts_con.execute("SELECT nextval('restaurants_id_seq')").fetchone()[0]
+            rest_id = facts_con.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM restaurants").fetchone()[0]
             facts_con.execute(
                 """
                 INSERT INTO restaurants
