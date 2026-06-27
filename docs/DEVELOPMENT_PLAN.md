@@ -17,8 +17,8 @@ Ogni fase è **indipendente e misurabile**: non si passa alla fase successiva pr
 ### Setup ambiente
 
 - [x] 🔴 Clonare il repository `datapizza-ai` e installare le dipendenze
-- [ ] 🔴 Configurare percorsi dati, Qdrant, Duckdb
-- [ ] 🔴 Struttura directory del repository creata come da §16:
+- [x] 🔴 Configurare percorsi dati, Qdrant (in memory), Duckdb (in memory)
+- [x] 🔴 Struttura directory del repository creata come da §16:
   ```
   src/app/, src/ingestion/, src/metrics/
   data/raw/, data/parsed/, data/database/, data/cache/
@@ -27,18 +27,18 @@ Ogni fase è **indipendente e misurabile**: non si passa alla fase successiva pr
 
 ### Verifica API `datapizza-ai`
 
-Nota: produrre dei dev test sulla cartella tests/ 
+Nota: produrre dei dev test sulla cartella `tests/`
 
-- [ ] 🔴 `Agent` — verificare che il costruttore accetti `tools` e `system_prompt`; testare un tool call fittizio end-to-end
-- [ ] 🔴 `IngestionPipeline` — verificare il metodo di avvio pipeline su un documento di test
-- [ ] 🔴 `DagPipeline` — verificare `add_module()` e l'esecuzione del grafo
-- [ ] 🔴 `DoclingParser` — parsare almeno un PDF di menu; verificare il formato dell'output
-- [ ] 🔴 `NodeSplitter` + `ChunkEmbedder` — produrre chunk da un testo di test e verificare il payload
-- [ ] 🔴 `OpenAIEmbedder` — verificare embedding di un testo campione
-- [ ] 🔴 `QdrantVectorstore` — `upsert`, `search`, `delete` su una collection di test
-- [ ] 🔴 `ChatPromptTemplate` + `ToolRewriter` — verificare la riscrittura di una query campione
-- [ ] 🔴 `ContextTracing` — verificare che i trace vengano emessi (anche solo su console/OTLP locale)
-- [ ] 🟡 Documentare eventuali breaking change o comportamenti inattesi nel file `docs/spike_notes.md`
+- [x] 🔴 `Agent` — verificare che il costruttore accetti `tools` e `system_prompt`; testare un tool call fittizio end-to-end
+- [x] 🔴 `IngestionPipeline` — verificare il metodo di avvio pipeline su un documento di test
+- [x] 🔴 `DagPipeline` — verificare `add_module()` e l'esecuzione del grafo
+- [x] 🔴 `DoclingParser` — parsare almeno un PDF di menu; verificare il formato dell'output
+- [x] 🔴 `NodeSplitter` + `ChunkEmbedder` — produrre chunk da un testo di test e verificare il payload
+- [x] 🔴 `OpenAIEmbedder` — verificare embedding di un testo campione
+- [x] 🔴 `QdrantVectorstore` — `upsert`, `search`, `delete` su una collection di test
+- [x] 🔴 `ChatPromptTemplate` + `ToolRewriter` — verificare la riscrittura di una query campione
+- [x] 🔴 `ContextTracing` — verificare che i trace vengano emessi (anche solo su console/OTLP locale)
+- [x] 🟡 ~~Documentare eventuali breaking change o comportamenti inattesi nel file `docs/spike_notes.md`~~ (nessun comportamento sospetto)
 
 ### Criteri di accettazione Fase 0
 
