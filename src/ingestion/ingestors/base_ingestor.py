@@ -223,7 +223,7 @@ class BaseIngestor(ABC):
             existing = ingestion_manager.km.log_get(source_path)
             log.info("checking extraction on: %s, i got %s", source_path, existing)
             if (existing and existing["doc_id"] == doc_id and
-                    existing["status"] in ["extracted", "embedding", "indexed"]):
+                    existing["status"] in ["extracted", "embedding", "indexed", "complete"]):
                 log.info("Skipping LLM extraction (already extracted): %s", source_path)
                 db_data = self.read_db_entries_for_embedding(doc_id, ingestion_manager.km.facts_con)
                 extracted_docs.append((doc_id, source_path, cache_path, db_data))
