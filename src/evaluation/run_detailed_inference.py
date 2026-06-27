@@ -3,11 +3,14 @@ run_inference.py — Esegue l'SQLAgent sulle domande del dataset e salva i risul
 legge "domande_con_risposte.csv" e produce "inference_results.csv"
 """
 import csv
+import difflib
 import logging
 from pathlib import Path
 
+from evaluation.generate_submission_file import get_dish_mapping
 from src.ingestion.knowledge_manager import KnowledgeManager
 from src.app.agents.sql_agent import SQLAgent
+from utils.normalizer_utils import extract_dishes_from_rows
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +20,7 @@ OUTPUT_CSV = DATASET_DIR / "inference_results.csv"
 
 
 def start_inference():
+    dish_mappings: dict[str, int] = get_dish_mapping()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
     if not INPUT_CSV.exists():
@@ -28,7 +32,7 @@ def start_inference():
     with open(OUTPUT_CSV, mode='w', encoding='utf-8', newline='') as out_f:
         writer = csv.writer(out_f)
         writer.writerow([
-            "row_id", "difficoltà", "domanda", "ground_truth_text",
+            "row_id", "difficoltà", "domanda", "ground_truth_text", "ground_truth_ids",
             "predicted_sql", "predicted_ids", "predicted_text"
         ])
 
@@ -43,29 +47,30 @@ def start_inference():
                     row_id = row.get("row_id", idx)
                     difficolta = row.get("difficoltà", "")
                     domanda = row.get("domanda", "")
-                    gt_text = row.get("risposta", "")
+                    gt_text = row.get("risposta", "").lower()
+                    gt_ids = row.get("result", "")
 
                     log.info(f"[{idx}] Processing row_id {row_id} ({difficolta}): {domanda[:50]}...")
-
-                    predicted_ids = ""
-                    predicted_text = ""
 
                     try:
                         result = agent.execute(domanda)
 
                         if result.error:
                             log.warning(f"Query fallita per row_id {row_id}: {result.error}")
-                            predicted_ids = "ERROR"
+                            predicted_ids = ""
                             predicted_text = result.error
                         elif not result.rows:
                             log.info(f"Nessun risultato trovato per row_id {row_id}.")
+                            predicted_ids = ""
                             predicted_text = "NO RESULTS"
                         else:
-                            ids = [str(r[0]) for r in result.rows]
-                            predicted_ids = ",".join(ids)
-
                             text_rows = [" | ".join(str(item) for item in r) for r in result.rows]
                             predicted_text = " \n ".join(text_rows)
+
+                            # Extract ids by Fuzzy Matching to avoid typos
+                            matches = extract_dishes_from_rows(result.rows, dish_mappings)
+                            ids = [str(item[1]) for item in matches if item is not None]
+                            predicted_ids = ",".join(ids)
 
                             log.info(f"-> Trovati {len(ids)} risultati.")
 
@@ -75,7 +80,7 @@ def start_inference():
                         predicted_text = str(e)
 
                     writer.writerow([
-                        row_id, difficolta, domanda, gt_text,
+                        row_id, difficolta, domanda, gt_text, gt_ids,
                         result.sql, predicted_ids, predicted_text
                     ])
 
