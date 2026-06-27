@@ -36,6 +36,7 @@ def evaluate_answers():
     system_prompt = """You are an evaluation agent for a RAG system.
 You are given the Ground Truth (the correct answer) and the Predicted Answer (what the system found).
 You must compare them and classify the result.
+Predicted answer could contain other irrelevant data about each item, just ignore the extra details and focus on dish names.
 
 CRITICAL RULES:
 - Return ONLY a JSON object with keys: "evaluation", "reason".

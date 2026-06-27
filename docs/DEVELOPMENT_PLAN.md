@@ -154,7 +154,7 @@ Fase 2 Superata (con item in sospeso)
 
 ### Tool deterministici SQL
 
-- [ ] 🔴 `src/app/tools/lookup_tools.py` — implementare i tool esposti all'orchestratore
+- [x] 🔴 Implementare i tool esposti all'orchestratore
 - [x] 🔴 Agente SQL (`src/app/agents/sql_agent.py`) — traduce linguaggio naturale in SQL, esegue, ritorna risultato raw con nomi colonne; auto-retry max 2 tentativi su errore sintattico
 
 ### Orchestratore base
@@ -177,6 +177,8 @@ Fase 2 Superata (con item in sospeso)
 ### Validazione tools
 
 - [x] 🔴 `/validation_utils.py` — verifica che ogni nome piatto sintetizzato esista nel `dish_mapping.json` prima dell'inclusione nella submission
+- [x] 🔴 `/run_inference.py` — fa partire l'inference di tutte le domande per estrarre delle risposte dettagliate
+- [x] 🔴 `/evaluate_result.py` — controlla il risultato dell'inferenza tramite LLM per stabilire cosa è andato male su ciascuna domanda
 
 ### Misura Jaccard Easy
 
