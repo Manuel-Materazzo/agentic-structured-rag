@@ -10,8 +10,12 @@ Responsibilities:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
 
 import duckdb
 
@@ -20,6 +24,7 @@ from src.app.config import (
     EMBEDDING_DIM,
     FACTS_DB_PATH,
     INGESTION_LOG_DB_PATH,
+    PARSED_DIR,
     QDRANT_API_KEY,
     QDRANT_HOST,
     QDRANT_LOCATION,
@@ -27,6 +32,22 @@ from src.app.config import (
 )
 
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def sha256_file(path: Path) -> str:
+    """Return the SHA-256 hex digest of a file's binary content."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +160,65 @@ def init_ingestion_log_db() -> duckdb.DuckDBPyConnection:
     con.execute(INGESTION_LOG_SCHEMA_SQL)
     log.info(f"ingestion_log.db ready at {INGESTION_LOG_DB_PATH}")
     return con
+
+
+# ---------------------------------------------------------------------------
+# Ingestion log helpers
+# ---------------------------------------------------------------------------
+
+def _log_upsert(
+    log_con: duckdb.DuckDBPyConnection,
+    doc_id: str,
+    source_path: str,
+    status: str,
+    error_message: Optional[str] = None,
+):
+    now = datetime.now(timezone.utc)
+    log_con.execute(
+        """
+        INSERT INTO ingestion_log (doc_id, source_path, content_hash, status, last_updated, error_message)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (doc_id) DO UPDATE SET
+            status = excluded.status,
+            last_updated = excluded.last_updated,
+            error_message = excluded.error_message
+        """,
+        [doc_id, source_path, doc_id, status, now, error_message],
+    )
+
+
+def _log_set_status(
+    log_con: duckdb.DuckDBPyConnection,
+    doc_id: str,
+    status: str,
+    error_message: Optional[str] = None,
+):
+    now = datetime.now(timezone.utc)
+    log_con.execute(
+        """
+        UPDATE ingestion_log
+        SET status = ?, last_updated = ?, error_message = ?
+        WHERE doc_id = ?
+        """,
+        [status, now, error_message, doc_id],
+    )
+
+
+def _log_get(
+    log_con: duckdb.DuckDBPyConnection,
+    source_path: str,
+) -> Optional[dict]:
+    row = log_con.execute(
+        "SELECT doc_id, source_path, content_hash, status, last_updated, error_message "
+        "FROM ingestion_log WHERE source_path = ?",
+        [source_path],
+    ).fetchone()
+    if row is None:
+        return None
+    return dict(zip(
+        ["doc_id", "source_path", "content_hash", "status", "last_updated", "error_message"],
+        row,
+    ))
 
 
 # ---------------------------------------------------------------------------
