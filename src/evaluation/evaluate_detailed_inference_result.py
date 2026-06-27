@@ -1,5 +1,5 @@
 """
-evaluate_results.py — Confronta le risposte generate con la ground truth usando un LLM.
+evaluate_results.py — Confronta le risposte generate (da run_inference.py) con la ground truth usando un LLM.
 Legge 'inference_results.csv' e produce 'evaluated_results.csv'.
 """
 import csv

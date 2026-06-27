@@ -73,7 +73,7 @@ Nota: produrre dei dev test sulla cartella `tests/`
 
 ### Mapping piatti
 
-- [x] 🔴 `src/app/submission.py` — carica `Dataset/ground_truth/dish_mapping.json` in memoria all'avvio
+- [x] 🔴 `generate_submission.py` — carica `Dataset/ground_truth/dish_mapping.json` in memoria all'avvio
 - [x] 🔴 Funzione `export_empty_submission()` — genera un CSV `output/submission.csv` con `row_id` vuoti per tutte le 100 domande (verifica del formato richiesto)
 
 ### Criteri di accettazione Fase 1
@@ -177,8 +177,8 @@ Fase 2 Superata (con item in sospeso)
 ### Validazione tools
 
 - [x] 🔴 `/validation_utils.py` — verifica che ogni nome piatto sintetizzato esista nel `dish_mapping.json` prima dell'inclusione nella submission
-- [x] 🔴 `/run_inference.py` — fa partire l'inference di tutte le domande per estrarre delle risposte dettagliate
-- [x] 🔴 `/evaluate_result.py` — controlla il risultato dell'inferenza tramite LLM per stabilire cosa è andato male su ciascuna domanda
+- [x] 🔴 `/run_detailed_inference.py` — fa partire l'inference di tutte le domande per estrarre delle risposte dettagliate (mantiene le risposte su disco per debug)
+- [x] 🔴 `/evaluate_detained_inference_result.py` — controlla il risultato dell'inferenza tramite LLM per stabilire cosa è andato male su ciascuna domanda
 
 ### Misura Jaccard Easy
 

@@ -1,5 +1,6 @@
 """
 run_inference.py — Esegue l'SQLAgent sulle domande del dataset e salva i risultati in CSV.
+legge "domande_con_risposte.csv" e produce "inference_results.csv"
 """
 import csv
 import logging
