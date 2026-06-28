@@ -45,7 +45,7 @@ def _build_datapizza_pipeline(vs, collection_name: str, chunk_max_char: int):
     """Build a datapizza-ai IngestionPipeline. Usiamo DoclingParser perché leggerà un .txt istantaneamente."""
     from datapizza.embedders import ChunkEmbedder
     from datapizza.embedders.openai import OpenAIEmbedder
-    from datapizza.modules.parsers.docling import DoclingParser
+    from datapizza.modules.parsers.md_parser import MDParser
     from datapizza.modules.splitters import NodeSplitter
     from datapizza.pipeline import IngestionPipeline as DatapizzaPipeline
     from app.config import EMBEDDING_MODEL
@@ -57,7 +57,7 @@ def _build_datapizza_pipeline(vs, collection_name: str, chunk_max_char: int):
     )
     return DatapizzaPipeline(
         modules=[
-            DoclingParser(),
+            MDParser(),
             NodeSplitter(max_char=chunk_max_char),
             ChunkEmbedder(client=embedder_client),
         ],
@@ -218,12 +218,12 @@ class MenuIngestor(BaseIngestor):
 
                 # Passa il file temporaneo alla pipeline
                 datapizza_pipeline.run(
+                    # TODO: why TextParser takes raw text as "file path"? open an issue
                     file_path=tmp_path,
                     metadata=build_payload(
                         doc_id=doc_id,
                         source_path=source_path,
                         source_type=self.source_type,
-                        text="",
                         restaurant=restaurant_name,
                     ),
                 )

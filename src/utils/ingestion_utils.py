@@ -109,7 +109,6 @@ def build_payload(
     doc_id: str,
     source_path: str,
     source_type: str,
-    text: str,
     section: str | None = None,
     restaurant: str | None = None,
     dish: str | None = None,
@@ -126,7 +125,6 @@ def build_payload(
         "section": section,
         "restaurant": restaurant,
         "dish": dish,
-        "text": text,
     }
     if extra:
         payload.update(extra)
