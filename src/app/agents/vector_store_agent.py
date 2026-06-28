@@ -12,6 +12,8 @@ from dataclasses import dataclass
 import logging
 from typing import Any
 
+from datapizza.vectorstores.qdrant import QdrantVectorstore
+
 from ingestion.structured_extraction import parse_json_response
 from app.config import (
     ALL_COLLECTIONS,
@@ -19,7 +21,7 @@ from app.config import (
     LLM_TEMPERATURE,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
-    EMBEDDING_MODEL,
+    EMBEDDING_MODEL, OPENAI_EMBEDDER_BASE_URL,
 )
 from ingestion.knowledge_manager import KnowledgeManager
 
@@ -172,8 +174,20 @@ class VectorStoreAgent:
         """Executes the query on Qdrant."""
         from datapizza.embedders.openai import OpenAIEmbedder
 
+        # Monkeypatch because datapizza doesn't expose the score
+        # TODO: open an issue
+        original_point_to_chunk = QdrantVectorstore._point_to_chunk
+
+        def _point_to_chunk_with_score(self, points):
+            chunks = original_point_to_chunk(self, points)
+            for chunk, point in zip(chunks, points):
+                chunk.metadata["score"] = getattr(point, "score", 0.0)
+            return chunks
+
+        QdrantVectorstore._point_to_chunk = _point_to_chunk_with_score
+
         # 1. Embed
-        embedder = OpenAIEmbedder(api_key=OPENAI_API_KEY, model_name=EMBEDDING_MODEL)
+        embedder = OpenAIEmbedder(api_key=OPENAI_API_KEY, model_name=EMBEDDING_MODEL, base_url=OPENAI_EMBEDDER_BASE_URL)
         query_vector = embedder.embed(text=query)
 
         # 2. Retrieve
@@ -182,12 +196,13 @@ class VectorStoreAgent:
         # 3. Format
         chunks = []
         for res in results:
-            score = getattr(res, "score", 0.0)
             payload = getattr(res, "metadata", getattr(res, "payload", {}))
             text = getattr(res, "text", payload.get("text", ""))
+            score = payload.get("score", 0.0)
             if score >= self._score_threshold:
                 chunks.append({
                     "score": float(score),
+                    "title": payload.get("source_path", "unknown"),
                     "text": text,
                     "source": payload.get("source_path", "unknown")
                 })

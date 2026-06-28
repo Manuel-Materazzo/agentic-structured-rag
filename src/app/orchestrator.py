@@ -136,20 +136,11 @@ class Orchestrator:
 
             log.info("Orchestrator agent response: %s", result.text)
 
-            # Parse the final JSON output from the agent
-            payload = parse_json_response(result.text)
-            candidates = payload.get("candidates", [])
-
-            if not isinstance(candidates, list):
-                candidates = []
-
-            log.info("Orchestrator extracted candidates: %s", candidates)
-
             return {
-                "candidates": candidates,
+                "candidates": result.text,
                 "agent_trace": getattr(result, "trace", None)
             }
 
         except Exception as e:
             log.error("Orchestrator crashed with error: %s", e, exc_info=True)
-            return {"candidates": [], "error": str(e)}
+            return {"candidates": "", "error": str(e)}
